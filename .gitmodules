@@ -1,0 +1,3 @@
+[submodule "external/TIGER"]
+	path = external/TIGER
+	url = https://github.com/JusperLee/TIGER.git
