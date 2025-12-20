@@ -4,7 +4,37 @@ Non-realtime dubbing - high-fidelity, open-access, dubbing for each language pai
 # Techniques
 1. Cascaded - STT - LLM - TTS (modular but loss of emotio, tone)
 	e.g. Kokuro TTS+LLM+STT (Unmute - uses Mistral Small 24B for LLM) for EN-FR
-2. End2End - 
+	
+	[TODO] We need to find a way where the info lost b/w STT-LLM is retained and then overlayed onto final result.
+	- TTS like [this fine-tune of neutts-air](https://huggingface.co/jaeyong2/neutts-air-hi-preview) take in ref text+audio to extract speaker tone and then generates speech from test text. Wow the hindi results are good.
+	Other, standard TTS include KyutaiTTS, Sesame and Nari Lab's Dia2.
+	
+	
+2. End2End - Generally, streaming systems.
+
+# Plan
+A. Demixing: 
+- De-mixes the speech audio into dialog + M&E i.e Music & Effects
+- Choice: TIGER / Demucs v4
+
+B. Speaker Diarization & Identification:
+- maps each audio to new/registered user ids.
+- Audio-only diarization: we use only audio to correctly label each audio to the speaker. This mainly helps with zero-shot voice cloning so that we don't clone the female audio using male's previous audio, etc. WhisperX helps with correct timestamp mapping (more on this below).
+- Choice: PyAudio + WhisperX
+- (optional) visual-audio diarization: This uses the video part to ensure that we only translate only for the foreground persons and not some BG noise. Choice: TalkNet, Dolphin.
+
+C. Transcription & Translation:
+- For multi-speaker convos, especially those lacking clear gap between consecutive speakers' speeches, we need to know exactly when a word was spoken (a.k.a Forced Alignment). This is done by WhisperX which uses VAD (for Hallucination Handling) and maps a timestamp to each word in the transcribed text.
+- For translation, we use IndicTrans2 as it beats most general EN-HI translators.
+- Isomorphic Translation: This ensures that the syllable count of the output text is close to that of input. (e.g 10% of input text). Choice: Any local LLM like quantized `Llama-3-8B-Instruct`. This can also be helpful in adding consistency checks e.g. Prompt: "Ensure the honorifics (Aap/Tum) remain consistent for Speaker A across this dialogue conversation."
+
+D. TTS & Zero-shot voice & emotion cloning:
+- To clone voice we prefer CosyVoice 3.0 over F5-TTS.
+- We can extract emotion using Speech Emotion Recognition (SER). Choice: `wav2vec2-large-robust-12-ft-emotion-msp-dim`. This should classify emotion and add corresponding token to CosyVoice (`<|angry|>`).
+
+E. (Optional) Synchronization:
+- Aims for perfect audio-lip synchronization for audio-video inputs.
+- Models like `IndexTTS-2` or `WSOLA` can modulate HI output audio to fit to EN speech length.
 
 # Updates 2025
 ## Dec 17
@@ -28,3 +58,8 @@ https://news.ycombinator.com/item?id=46264491#46279654
 - [CosyVoice-3.0 TTS+zero-shot voice cloning](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) - works for Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian), 18+ Chinese dialects.
 - [Other En-Ch models](https://github.com/FunAudioLLM/CosyVoice?tab=readme-ov-file#evaluation) This can also be used as reference for other languages in future.
 - NVIDIA Nemotron (NIM) for cascaded system.
+- [Separation of voice, music and effects from singel audio - really cool eg from movies](https://cslikai.cn/TIGER/)
+- [Speaker Diarization/Separation with visual cues](https://huggingface.co/JusperLee/Dolphin)
+- [TODO LLM-based TTS models](https://huggingface.co/blog/YatharthS/llm-tts-models)
+- [TODO Making NeuTTS 200x realtime](https://huggingface.co/blog/YatharthS/making-neutts-200x-realtime)
+- [Video-dubbing](https://huggingface.co/spaces/vuxuanhoan/video-dubbing)
