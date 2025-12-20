@@ -63,3 +63,19 @@ https://news.ycombinator.com/item?id=46264491#46279654
 - [TODO LLM-based TTS models](https://huggingface.co/blog/YatharthS/llm-tts-models)
 - [TODO Making NeuTTS 200x realtime](https://huggingface.co/blog/YatharthS/making-neutts-200x-realtime)
 - [Video-dubbing](https://huggingface.co/spaces/vuxuanhoan/video-dubbing)
+
+----- 
+
+# Setup
+Install requirements
+```console
+conda install python==3.10
+
+git clone --recursive https://github.com/pra-dan/dubpls.git
+
+conda activate dubpls -y
+conda install pip -y
+
+pip install -r external/TIGER/requirements.txt
+pip install -r requirements.txt
+```
