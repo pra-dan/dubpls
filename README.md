@@ -67,14 +67,27 @@ https://news.ycombinator.com/item?id=46264491#46279654
 ----- 
 
 # Setup
+
+
+
+Get HF read-access token and add to env. From official WhisperX docs:
+> To enable Speaker Diarization, include your Hugging Face access token (read) that you can generate from [Here](https://huggingface.co/settings/tokens) after the `--hf_token` argument and accept the user agreement for the following models: [Segmentation](https://huggingface.co/pyannote/segmentation-3.0) and [Speaker-Diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) ...
+```
+export HF_READ_TOKEN=hf_LxPrdDqc...
+```
+
 Install requirements
 ```console
-conda install python==3.10
+conda create -n whisperx -y
+conda activate whisperx
+conda install pip -y
+conda install python==3.11 -y
+
+#Explicitly add lib path to [stay away from dependency issues](https://github.com/m-bain/whisperX/issues/902#issuecomment-2646634513):
+
+export LD_LIBRARY_PATH=/PATH/TO/ENV/whisperx/lib/python3.11/site-packages/nvidia/cudnn/lib/ # use which python perhaps
 
 git clone --recursive https://github.com/pra-dan/dubpls.git
-
-conda activate dubpls -y
-conda install pip -y
 
 pip install -r external/TIGER/requirements.txt
 pip install -r requirements.txt

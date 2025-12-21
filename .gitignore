@@ -4,6 +4,12 @@ cache
 *.py[codz]
 *$py.class
 
+# env things
+*.env
+
+# Outputs
+media
+
 # C extensions
 *.so
 

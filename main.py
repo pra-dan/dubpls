@@ -5,6 +5,7 @@ import os
 
 from utils import isolate_media_streams
 from breakdown_audio import breakdown_audio
+from diarize import diarize_with_forced_alignment
 
 def main():
     with open("config.yaml","r") as f:  
@@ -21,25 +22,13 @@ def main():
 
         # Run speech separation using TIGER model
         breakdown_audio(wav_path)
-        # script_path = os.path.join("external", "TIGER", "inference_dnr.py")
-        # if not os.path.exists(script_path):
-        #     print(f"[E] Script not found at {script_path}! Check submodule imports. Exiting")
-        #     return
         
-        # print(f"Running speech separation on: {wav_path}")
-        # try:
-        #     result = subprocess.run(
-        #         [sys.executable, script_path, "--audio_path", wav_path], # "--output_dir", config["out_file_path"]
-        #         check=True,
-        #         capture_output=False,  # Set to True if you want to capture output
-        #         cwd=os.path.dirname(os.path.abspath(__file__))  # Run from project root
-        #     )
-        #     print("Speech separation completed successfully")
-        # except subprocess.CalledProcessError as e:
-        #     print(f"[E] Error running speech separation: {e}")
-        #     return
-
-        
+        # Transcribe and force-align
+        base_name = os.path.splitext(wav_path)[0]
+        hf_read_token = os.getenv('HF_READ_TOKEN')
+        if not hf_read_token:
+            raise ValueError("No API token found. Set the API_TOKEN environment variable.")
+        diarize_with_forced_alignment(f"{base_name}_dialog.wav", hf_read_token)
 
 if __name__ == "__main__":
     main()
