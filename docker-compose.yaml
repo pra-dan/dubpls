@@ -1,0 +1,22 @@
+services:
+  llama-server:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    # entrypoint: ["sleep", "infinity"]
+    command: >
+      -m /models/sarvam-translate.Q3_K_M.gguf
+      --port 8080
+      --host 0.0.0.0
+      -n 512
+      -fa on
+    volumes:
+      - ./models:/models
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+              #device_ids: ['0']

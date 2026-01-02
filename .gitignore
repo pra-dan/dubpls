@@ -9,6 +9,7 @@ cache
 
 # Outputs
 media
+models
 
 # C extensions
 *.so

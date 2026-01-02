@@ -92,3 +92,16 @@ git clone --recursive https://github.com/pra-dan/dubpls.git
 pip install -r external/TIGER/requirements.txt
 pip install -r requirements.txt
 ```
+
+Download the translation model weights - using [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) here.
+
+Launch Sarvam Translation server
+```bash
+sudo docker compose up # uses port 8080
+
+# Hit the server using
+# curl -s \
+#     --request POST --url http://127.0.0.1:8080/v1/chat/completions \
+#     --header "Content-Type: application/json" \
+#     --data '{"messages": [ { "role": "system", "content": "Translate the text below to Hindi." }, { "role": "user", "content": "Mr. Wilson, you appear to have soiled yourself while on duty." }]}'
+```
