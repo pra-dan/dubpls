@@ -9,6 +9,7 @@ Reference: WhisperX Official example: https://github.com/m-bain/whisperX/issues/
 import whisperx
 import gc
 import os
+import gc
 from whisperx.diarize import DiarizationPipeline
 
 device = "cuda"
@@ -57,6 +58,11 @@ def diarize_with_forced_alignment(dialog_wav_path, hf_read_token):
     with open(json_path, "w", encoding="utf-8") as json_file:
         json.dump(result, json_file, ensure_ascii=False, indent=4)
         print("diarization results saved to ",json_path)
+
+    os.remove(model)
+    os.remove(diarize_model)
+    gc.collect()
+    return json_path
 
 if __name__ == '__main__':
     diarize_with_forced_alignment("media/deadpool-2025-12-18_15.27.22_extracted_dialog.wav", os.getenv('HF_READ_TOKEN'))

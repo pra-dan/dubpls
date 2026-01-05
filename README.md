@@ -120,4 +120,3 @@ Run pipeline
 ```
 python3 main.py
 ```
-

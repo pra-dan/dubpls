@@ -6,6 +6,7 @@ import os
 from utils import isolate_media_streams
 from breakdown_audio import breakdown_audio
 from diarize import diarize_with_forced_alignment
+from translate import translate_segments
 
 def main():
     with open("config.yaml","r") as f:  
@@ -28,7 +29,11 @@ def main():
         hf_read_token = os.getenv('HF_READ_TOKEN')
         if not hf_read_token:
             raise ValueError("No API token found. Set the API_TOKEN environment variable.")
-        diarize_with_forced_alignment(f"{base_name}_dialog.wav", hf_read_token)
+        # diary_json_path = diarize_with_forced_alignment(f"{base_name}_dialog.wav", hf_read_token)
+        diary_json_path = "media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
+
+        # Translate
+        translate_segments(diary_json_path)
 
 if __name__ == "__main__":
     main()
