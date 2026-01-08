@@ -2,8 +2,10 @@ services:
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     # entrypoint: ["sleep", "infinity"]
+     # -m /models/sarvam-translate.Q3_K_M.gguf
+     # -m /models/Apertus-8B-2509.Q4_K_M.gguf
     command: >
-      -m /models/sarvam-translate.Q3_K_M.gguf
+      -m /models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf
       --port 8080
       --host 0.0.0.0
       -n 512

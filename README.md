@@ -48,10 +48,15 @@ Only keeping the English to Hindi for start. The workflow would be: video/audio 
 
 So we'll only update the workflow for a language pair if there is a higher-fidelity possible - not for speed or multi-platform support.
 
+# Updates 2026
+## Jan 7
+Pausing dev for HI as the only acceptable TTS is [Coqui_ai-XTTS-v3](/home/prashant/Documents/coqui-ai-TTS/run.py) and even the translation looks un-natural. So taking up FR as next language.
+
 ## To explore
 - Seed-TTS
 - Qwen 2.5-Omni-7B
 https://news.ycombinator.com/item?id=46264491#46279654
+- [Comparative study on Prosody](https://arxiv.org/pdf/2511.02104)
 
 # Resources
 - [StreamSpeech - only support for Fr, En, Es, De](https://github.com/ictnlp/StreamSpeech)
@@ -63,7 +68,9 @@ https://news.ycombinator.com/item?id=46264491#46279654
 - [TODO LLM-based TTS models](https://huggingface.co/blog/YatharthS/llm-tts-models)
 - [TODO Making NeuTTS 200x realtime](https://huggingface.co/blog/YatharthS/making-neutts-200x-realtime)
 - [Video-dubbing](https://huggingface.co/spaces/vuxuanhoan/video-dubbing)
-
+- [NLLB demo for any2any language translation](https://huggingface.co/spaces/UNESCO/nllb)
+- [Voice cloning using Coqui](https://coqui-tts.readthedocs.io/en/latest/vc.html)
+- [Fine-tune indic TTS](https://snorbyte.com/blog/train-sota-multilingual-indic-tts)
 ----- 
 
 # Setup

@@ -6,7 +6,7 @@ import os
 from utils import isolate_media_streams
 from breakdown_audio import breakdown_audio
 from diarize import diarize_with_forced_alignment
-from translate import translate_segments
+from translations import translate_segments
 
 def main():
     with open("config.yaml","r") as f:  
@@ -33,7 +33,7 @@ def main():
         diary_json_path = "media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
 
         # Translate
-        translate_segments(diary_json_path)
+        translate_segments(diary_json_path, config)
 
 if __name__ == "__main__":
     main()
