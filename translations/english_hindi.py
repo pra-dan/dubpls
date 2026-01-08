@@ -6,9 +6,12 @@ from .base import BaseTranslator
 
 class EnglishToHindiTranslator(BaseTranslator):
     """
-    Hits a llama.cpp server, that uses "sarvam-translate.Q3_K_M"
+    Hits a llama.cpp server, that uses "sarvam-translate.Q3_K_M".
     """
+
     target_language = "hi"
+    # Sarvam EN-HI model
+    model_path = "/models/sarvam-translate.Q3_K_M.gguf"
 
     def __init__(self, url: str = "http://localhost:8080/v1/chat/completions"):
         self.url = url

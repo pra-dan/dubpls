@@ -1,16 +1,38 @@
 import json
+import os
+import subprocess
+import time
+from abc import ABC, abstractmethod
 from typing import Optional
 
 from tqdm import tqdm
 
 
-class BaseTranslator(self):
-    warmup_text: Optional[str] = "if you see this, translation is working!"
+class BaseTranslator(ABC):
+    """
+    Base class for all language-specific translators.
 
-    # @property
-    # @abstractmethod
-    # def target_language(self) -> str:
-    #     return target_language
+    Responsibilities:
+    - Start the appropriate llama.cpp container via docker-compose
+      using the per-language MODEL_PATH.
+    - Run a warm-up request.
+    - Translate and write back to the diarization JSON.
+    - Shut the container down gracefully.
+    """
+
+    # Must be overridden per language
+    target_language: str = ""
+    model_path: str = ""
+
+    # docker compose settings
+    service_name: str = "llama-server"
+    project_name: str = "dubpls-translate"
+    compose_file: str = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "docker-compose.yaml"
+    )
+
+    # Optional warm-up text
+    warmup_text: Optional[str] = "if you see this, translation is working!"
 
     @abstractmethod
     def translate_text(self, text: str) -> str:
@@ -19,24 +41,73 @@ class BaseTranslator(self):
         """
 
     def translate_segments(self, json_path: str) -> None:
-        self._warm_up()
+        """
+        High-level orchestration:
+        - start container
+        - warm up
+        - translate all segments
+        - stop container
+        """
+        self._start_server()
+        try:
+            self._warm_up()
 
-        with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-        for segment in tqdm(data.get("segments", [])):
-            src_text = segment.get("text", "")
-            translated = self.translate_text(src_text)
-            target_language = self.target_language
-            segment[target_language] = translated
+            for segment in tqdm(data.get("segments", [])):
+                src_text = segment.get("text", "")
+                translated = self.translate_text(src_text)
+                lang_key = self.target_language or "translation"
+                segment[lang_key] = translated
 
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        finally:
+            self._stop_server()
+
+    def _compose_base_cmd(self) -> list[str]:
+        return [
+            "docker",
+            "compose",
+            "-f",
+            self.compose_file,
+            "-p",
+            self.project_name,
+        ]
+
+    def _start_server(self) -> None:
+        """
+        Start the llama.cpp server container for this translator's model.
+        """
+        env = os.environ.copy()
+        env["MODEL_PATH"] = self.model_path
+        cmd = self._compose_base_cmd() + ["up", "-d", self.service_name]
+        try:
+            subprocess.run(cmd, check=True, env=env)
+        except Exception as e:
+            print(f"[E] Failed to start translation server: {e}")
+            raise
+
+        # small grace period for the server to come up
+        time.sleep(2)
+
+    def _stop_server(self) -> None:
+        """
+        Stop the llama.cpp server container gracefully.
+        """
+        env = os.environ.copy()
+        env["MODEL_PATH"] = self.model_path
+        cmd = self._compose_base_cmd() + ["down"]
+        try:
+            subprocess.run(cmd, check=True, env=env)
+        except Exception as e:
+            print(f"[W] Failed to stop translation server cleanly: {e}")
 
     def _warm_up(self) -> None:
         """
-        Runs the translation in target lang once, before bombarding 
-        the server with failing requests
+        Runs the translation in target lang once, before bombarding
+        the server with failing requests.
         """
         if not self.warmup_text:
             return
@@ -46,4 +117,5 @@ class BaseTranslator(self):
             print("Translation module isn't working as intended")
         else:
             print(response)
+
 

@@ -1,4 +1,4 @@
-# from .base import BaseTranslator
+from .base import BaseTranslator
 from .english_hindi import EnglishToHindiTranslator
 from .english_french import EnglishToFrenchTranslator
 
@@ -16,15 +16,13 @@ def get_translator(language: str) -> BaseTranslator:
     return translator_cls()
 
 
-def translate_segments(config: dict, json_path: str) -> None:
+def translate_segments(json_path: str, config: dict) -> None:
     """
     Common translation entry point. Leads to a language-specific translator.
     """
-    target_language = config["target_language"]
+    target_language = config.get("target_language", "hi")
     translator = get_translator(target_language)
     translator.translate_segments(json_path)
 
 # only the names listed in __all__ will be imported when using "from translations import *"
-# __all__ = ["BaseTranslator", "translate_segments", "get_translator"]
 __all__ = ["translate_segments"]
-
