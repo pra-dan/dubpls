@@ -9,14 +9,14 @@ class EnglishToFrenchTranslator(BaseTranslator):
     Hits a llama.cpp server with a French-capable model.
     """
 
-    target_language: str = "fr"
+    target_language = "fr"
     # Example FR-capable model; adjust as needed
-    model_path: str = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
+    model_path = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
 
-    def __init__(self, url: str = "http://localhost:8080/v1/chat/completions"):
-        self.url = url
+    # def __init__(self, url):
+    #     self.url = url
 
-    def translate_text(self, text: str) -> str:
+    def translate_text(self, text) -> str:
         headers = {"Content-Type": "application/json"}
         # You will likely want a more FR-specific prompt later
         data = {

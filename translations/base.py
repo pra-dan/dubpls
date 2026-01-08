@@ -26,6 +26,8 @@ class BaseTranslator(ABC):
     # docker compose settings
     service_name = "llama-server"
     project_name = "dubpls-translate"
+    url = "http://127.0.0.1:8080/v1/chat/completions"
+    
     compose_file = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "docker-compose.yaml"
     )

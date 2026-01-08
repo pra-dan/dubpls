@@ -110,9 +110,11 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=true
 ```
 
 
-Download the translation model weights - using [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) here.
+Download the translation model weights and move to "models" directory- 
+1. Hindi: [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf)
+2. French: [mradermacher's quant of TowerInstruct-Mistral-7B](https://huggingface.co/mradermacher/TowerInstruct-Mistral-7B-v0.2-GGUF?show_file_info=TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf)
 
-Launch Sarvam Translation server
+<!-- Launch Sarvam Translation server
 ```bash
 sudo docker compose up # uses port 8080
 
@@ -121,7 +123,7 @@ sudo docker compose up # uses port 8080
 #     --request POST --url http://127.0.0.1:8080/v1/chat/completions \
 #     --header "Content-Type: application/json" \
 #     --data '{"messages": [ { "role": "system", "content": "Translate the text below to Hindi." }, { "role": "user", "content": "Mr. Wilson, you appear to have soiled yourself while on duty." }]}'
-```
+``` -->
 
 Run pipeline 
 ```

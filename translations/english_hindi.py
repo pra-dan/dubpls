@@ -13,8 +13,8 @@ class EnglishToHindiTranslator(BaseTranslator):
     # Sarvam EN-HI model
     model_path = "/models/sarvam-translate.Q3_K_M.gguf"
 
-    def __init__(self, url: str = "http://127.0.0.1:8080/v1/chat/completions"):
-        self.url = url
+    # def __init__(self, url):
+    #     self.url = url
 
     def translate_text(self, text: str) -> str:
         headers = {"Content-Type": "application/json"}
