@@ -3,14 +3,13 @@ import os
 import subprocess
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from tqdm import tqdm
 
 
 class BaseTranslator(ABC):
     """
-    Base class for all language-specific translators.
+    Base translator class
 
     Responsibilities:
     - Start the appropriate llama.cpp container via docker-compose
@@ -21,26 +20,26 @@ class BaseTranslator(ABC):
     """
 
     # Must be overridden per language
-    target_language: str = ""
-    model_path: str = ""
+    target_language = ""
+    model_path = ""
 
     # docker compose settings
-    service_name: str = "llama-server"
-    project_name: str = "dubpls-translate"
-    compose_file: str = os.path.join(
+    service_name = "llama-server"
+    project_name = "dubpls-translate"
+    compose_file = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "docker-compose.yaml"
     )
 
-    # Optional warm-up text
-    warmup_text: Optional[str] = "if you see this, translation is working!"
+    # warm-up text
+    warmup_text = "if you see this, translation is working!"
 
     @abstractmethod
-    def translate_text(self, text: str) -> str:
+    def translate_text(self, text) -> str:
         """
         Translate the provided text into the target language.
         """
 
-    def translate_segments(self, json_path: str) -> None:
+    def translate_segments(self, json_path) -> None:
         """
         High-level orchestration:
         - start container
@@ -50,7 +49,9 @@ class BaseTranslator(ABC):
         """
         self._start_server()
         try:
-            self._warm_up()
+            status = self._warm_up()
+            if(not status):
+                return
 
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -89,7 +90,7 @@ class BaseTranslator(ABC):
             print(f"[E] Failed to start translation server: {e}")
             raise
 
-        # small grace period for the server to come up
+        # grace period
         time.sleep(2)
 
     def _stop_server(self) -> None:
@@ -111,11 +112,13 @@ class BaseTranslator(ABC):
         """
         if not self.warmup_text:
             return
-        print("warm+test translation run")
+        print("warmup + test translation run")
         response = self.translate_text(self.warmup_text)
         if response == "":
             print("Translation module isn't working as intended")
+            return False
         else:
             print(response)
+            return True
 
 

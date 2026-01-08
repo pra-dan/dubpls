@@ -13,7 +13,7 @@ class EnglishToHindiTranslator(BaseTranslator):
     # Sarvam EN-HI model
     model_path = "/models/sarvam-translate.Q3_K_M.gguf"
 
-    def __init__(self, url: str = "http://localhost:8080/v1/chat/completions"):
+    def __init__(self, url: str = "http://127.0.0.1:8080/v1/chat/completions"):
         self.url = url
 
     def translate_text(self, text: str) -> str:
@@ -36,4 +36,3 @@ class EnglishToHindiTranslator(BaseTranslator):
         except Exception as e:
             print(f"Translation error: {e}")
             return ""
-

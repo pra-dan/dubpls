@@ -3,6 +3,10 @@ import subprocess
 import sys
 import os
 
+# load HF API key, etc
+from dotenv import load_dotenv
+load_dotenv() 
+
 from utils import isolate_media_streams
 from breakdown_audio import breakdown_audio
 from diarize import diarize_with_forced_alignment

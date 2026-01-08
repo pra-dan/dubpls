@@ -4,3 +4,4 @@ torchvision==0.23.0+cu128
 transformers==4.57.3
 ffmpeg-python
 whisperx
+python-dotenv
