@@ -96,6 +96,26 @@ git clone --recursive https://github.com/pra-dan/dubpls.git
 
 pip install -r external/TIGER/requirements.txt
 pip install -r requirements.txt
+
+# For CosyVoice
+conda create -n cosyvoice -y python=3.10
+conda activate cosyvoice
+cd external/CosyVoice
+pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+
+apt-get install sox libsox-dev # For CosyVoice
+
+# In a python console --- 
+from huggingface_hub import snapshot_download
+snapshot_download('FunAudioLLM/CosyVoice2-0.5B', local_dir='external/CosyVoice/CosyVoice2-0.5B')
+snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='external/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B')
+snapshot_download('FunAudioLLM/CosyVoice-ttsfrd', local_dir='external/CosyVoice/pretrained_models/CosyVoice-ttsfrd')
+# ---
+
+cd external/CosyVoice/pretrained_models/CosyVoice-ttsfrd/
+unzip resource.zip -d .
+pip install ttsfrd_dependency-0.1-py3-none-any.whl
+pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 ```
 
 # Additional fixes

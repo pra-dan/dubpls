@@ -18,7 +18,6 @@ class EnglishToFrenchTranslator(BaseTranslator):
 
     def translate_text(self, text) -> str:
         headers = {"Content-Type": "application/json"}
-        # You will likely want a more FR-specific prompt later
         data = {
             "messages": [
                 {
