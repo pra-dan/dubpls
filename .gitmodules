@@ -1,3 +1,6 @@
 [submodule "external/TIGER"]
 	path = external/TIGER
 	url = https://github.com/JusperLee/TIGER.git
+[submodule "external/CosyVoice"]
+	path = external/CosyVoice
+	url = https://github.com/FunAudioLLM/CosyVoice.git
