@@ -161,7 +161,7 @@ def get_segment_duration(segment: dict):
 #             except Exception as e:
 #                 print(f"[W] Failed to remove temp directory {temp_dir}: {e}")
 
-# if __name__ == "__main__":
-#     jpath = "/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
-#     apath = "/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog.wav"
-#     collect_seconds_long_audio(jpath, apath, 'SPEAKER_01', 6)
+if __name__ == "__main__":
+    jpath = "/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
+    apath = "/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog.wav"
+    collect_seconds_long_audio(jpath, apath, 'SPEAKER_01', 6)

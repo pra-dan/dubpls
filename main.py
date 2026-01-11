@@ -39,5 +39,10 @@ def main():
         # Translate T2T
         translate_segments(diary_json_path, config)
 
+        # export json and test audio to env, for next stage
+        env = os.environ.copy()
+        env["SESSION_JSON_PATH"] = diary_json_path
+        env["TEST_DIALOGUE_AUDIO_PATH"] = wav_path
+
 if __name__ == "__main__":
     main()
