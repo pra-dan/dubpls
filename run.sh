@@ -16,4 +16,4 @@ ffmpeg -i /home/prashant/Documents/dubpls/tts/media/final_french_dialogue.wav \
 # merge audio and video
 ffmpeg -i /home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_muted.mp4 \
        -i media/final_dubbed_audio.wav -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 \
-       media/deadpool-2025-12-18_15.27.22_fr.mp4
+       media/deadpool-2025-12-18_15.27.22_fr_jan12_1719.mp4
