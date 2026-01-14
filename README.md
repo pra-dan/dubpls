@@ -52,6 +52,14 @@ So we'll only update the workflow for a language pair if there is a higher-fidel
 ## Jan 7
 Pausing dev for HI as the only acceptable TTS is [Coqui_ai-XTTS-v3](/home/prashant/Documents/coqui-ai-TTS/run.py) and even the translation looks un-natural. So taking up FR as next language.
 
+## Jan 14
+The issue with segments (#8: loss of word and #3: no voice cloning) is not with ttsfrd but rather with the prompt (audio+text) length. #8 is resolved once the length increased. 
+
+#3: Is this supposed to be scary | Estce cense faire peur? -> no cloning | pre, post procN checked
+#8: Who are you? | Qui estu? -> too short prompt(text/audio)
+
+The author [suggests 5 to 10s of prompt audio](https://github.com/FunAudioLLM/CosyVoice/issues/1070#issuecomment-2727273122).
+
 ## To explore
 - Seed-TTS
 - Qwen 2.5-Omni-7B
