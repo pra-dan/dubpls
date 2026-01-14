@@ -1,5 +1,31 @@
 # dubpls
 Non-realtime dubbing - high-fidelity, open-access, dubbing for English (`En`) to non-English.
+## Demo
+
+Below is a quick demo of dubpls (work in progress :). Note how dubpls tries to preserve the original speaker's voice and emotion.
+
+<table>
+  <tr>
+    <th>Original (Undubbed)</th>
+    <th>Dubbed (French)</th>
+  </tr>
+  <tr>
+    <td>
+      <video width="320" controls>
+        <source src="assets/deadpool-2025-12-18_15.27.22.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+    </td>
+    <td>
+      <video width="320" controls>
+        <source src="assets/2ssu_deadpool-2025-12-18_15.27.22_fr_jan12_1719.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+    </td>
+  </tr>
+</table>
+
+Video Credit: Marvel Studios (Deadpool vs. Wolverine)
 
 # Plan
 A. Demixing: 
