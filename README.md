@@ -1,16 +1,5 @@
 # dubpls
-Non-realtime dubbing - high-fidelity, open-access, dubbing for each language pair.
-
-# Techniques
-1. Cascaded - STT - LLM - TTS (modular but loss of emotio, tone)
-	e.g. Kokuro TTS+LLM+STT (Unmute - uses Mistral Small 24B for LLM) for EN-FR
-	
-	[TODO] We need to find a way where the info lost b/w STT-LLM is retained and then overlayed onto final result.
-	- TTS like [this fine-tune of neutts-air](https://huggingface.co/jaeyong2/neutts-air-hi-preview) take in ref text+audio to extract speaker tone and then generates speech from test text. Wow the hindi results are good.
-	Other, standard TTS include KyutaiTTS, Sesame and Nari Lab's Dia2.
-	
-	
-2. End2End - Generally, streaming systems.
+Non-realtime dubbing - high-fidelity, open-access, dubbing for English (`En`) to non-English.
 
 # Plan
 A. Demixing: 
@@ -35,7 +24,7 @@ D. TTS & Zero-shot voice & emotion cloning:
 E. (Optional) Synchronization:
 - Aims for perfect audio-lip synchronization for audio-video inputs.
 - Models like `IndexTTS-2` or `WSOLA` can modulate HI output audio to fit to EN speech length.
-
+<!-- 
 # Updates 2025
 ## Dec 17
 The project was initially meant to be local-first, accuracy second - Imagine a single-click-installation VLC extension that doesn't require you to install any dependency and takes some time to generate the new dub audio with some delay. We can use a preprocessing / buffer window that gives the illusion of real-timeness at the cost of fidelity.
@@ -58,13 +47,8 @@ The issue with segments (#8: loss of word and #3: no voice cloning) is not with 
 #3: Is this supposed to be scary | Estce cense faire peur? -> no cloning | pre, post procN checked
 #8: Who are you? | Qui estu? -> too short prompt(text/audio)
 
-The author [suggests 5 to 10s of prompt audio](https://github.com/FunAudioLLM/CosyVoice/issues/1070#issuecomment-2727273122).
+The author [suggests 5 to 10s of prompt audio](https://github.com/FunAudioLLM/CosyVoice/issues/1070#issuecomment-2727273122). -->
 
-## To explore
-- Seed-TTS
-- Qwen 2.5-Omni-7B
-https://news.ycombinator.com/item?id=46264491#46279654
-- [Comparative study on Prosody](https://arxiv.org/pdf/2511.02104)
 
 # Resources
 - [StreamSpeech - only support for Fr, En, Es, De](https://github.com/ictnlp/StreamSpeech)
@@ -79,68 +63,68 @@ https://news.ycombinator.com/item?id=46264491#46279654
 - [NLLB demo for any2any language translation](https://huggingface.co/spaces/UNESCO/nllb)
 - [Voice cloning using Coqui](https://coqui-tts.readthedocs.io/en/latest/vc.html)
 - [Fine-tune indic TTS](https://snorbyte.com/blog/train-sota-multilingual-indic-tts)
+- [this fine-tune of neutts-air](https://huggingface.co/jaeyong2/neutts-air-hi-preview)
+- [Comparative study on Prosody](https://arxiv.org/pdf/2511.02104)
 ----- 
 
 # Setup
 
-## Env:
+## Tested Env:
+```
 driver: 580.95.05
 PyTorch==2.8.0+cu128
-
-Get HF read-access token and add to env. From official WhisperX docs:
-> To enable Speaker Diarization, include your Hugging Face access token (read) that you can generate from [Here](https://huggingface.co/settings/tokens) after the `--hf_token` argument and accept the user agreement for the following models: [Segmentation](https://huggingface.co/pyannote/segmentation-3.0) and [Speaker-Diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) ...
-```
-export HF_READ_TOKEN=hf_LxPrdDqc...
 ```
 
-Install requirements
-```console
+a. Install WhisperX using [official instructions](https://github.com/m-bain/whisperX).
+<!-- ```console
+# env 1: whisperx
 conda create -n whisperx -y
 conda activate whisperx
 conda install pip -y
 conda install python==3.11 -y
-
+``` -->
+b. Clone repo and install dependencies
+```
 git clone --recursive https://github.com/pra-dan/dubpls.git
-
 pip install -r external/TIGER/requirements.txt
 pip install -r requirements.txt
+```
 
-# For CosyVoice
+c. Install CosyVoice using [official instructions](https://github.com/FunAudioLLM/CosyVoice) and [download weights and install ttsfrd](https://github.com/FunAudioLLM/CosyVoice?tab=readme-ov-file#model-download) for CosyVoice3.
+
+<!-- # env 2: cosyvoice (For CosyVoice)
 conda create -n cosyvoice -y python=3.10
 conda activate cosyvoice
 cd external/CosyVoice
 pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host=mirrors.aliyun.com
+apt-get install sox libsox-dev 
 
-apt-get install sox libsox-dev # For CosyVoice
-
-# In a python console --- 
+# Download weights for Cosyvoice. In a python console --- 
 from huggingface_hub import snapshot_download
 snapshot_download('FunAudioLLM/CosyVoice2-0.5B', local_dir='external/CosyVoice/CosyVoice2-0.5B')
 snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='external/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B')
-snapshot_download('FunAudioLLM/CosyVoice-ttsfrd', local_dir='external/CosyVoice/pretrained_models/CosyVoice-ttsfrd')
-# ---
+snapshot_download('FunAudioLLM/CosyVoice-ttsfrd', local_dir='external/CosyVoice/pretrained_models/CosyVoice-ttsfrd') 
 
 cd external/CosyVoice/pretrained_models/CosyVoice-ttsfrd/
 unzip resource.zip -d .
 pip install ttsfrd_dependency-0.1-py3-none-any.whl
 pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 ```
+-->
 
-# Additional fixes
-1. Explicitly add lib path to [stay away from dependency issues](https://github.com/m-bain/whisperX/issues/902#issuecomment-2646634513):
-```
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
-```
+d. Download the translation model weights and move to "models" directory
+| language | weights / quants |
+|--|--|
+|Hindi | [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) |
+| French | [mradermacher's quant of TowerInstruct-Mistral-7B](https://huggingface.co/mradermacher/TowerInstruct-Mistral-7B-v0.2-GGUF?show_file_info=TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf) |
 
-2. If you use torch>2.6, whisperX will likely give [another issue](https://github.com/m-bain/whisperX/issues/1304#issuecomment-3599713003). The suggested solution is
-```
-export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=true
-```
+e. Get HF read-access token and add to env. From official WhisperX docs:
+> To enable Speaker Diarization, include your Hugging Face access token (read) that you can generate from [Here](https://huggingface.co/settings/tokens) after the `--hf_token` argument and accept the user agreement for the following models: [Segmentation](https://huggingface.co/pyannote/segmentation-3.0) and [Speaker-Diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1) ...
 
-
-Download the translation model weights and move to "models" directory- 
-1. Hindi: [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf)
-2. French: [mradermacher's quant of TowerInstruct-Mistral-7B](https://huggingface.co/mradermacher/TowerInstruct-Mistral-7B-v0.2-GGUF?show_file_info=TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf)
+Save the token to a `.env` file e.g.,
+```txt
+HF_READ_TOKEN=hf_LxPdD...
+```
 
 <!-- Launch Sarvam Translation server
 ```bash
@@ -153,7 +137,24 @@ sudo docker compose up # uses port 8080
 #     --data '{"messages": [ { "role": "system", "content": "Translate the text below to Hindi." }, { "role": "user", "content": "Mr. Wilson, you appear to have soiled yourself while on duty." }]}'
 ``` -->
 
-Run pipeline 
+# Run pipeline 
+Choose language in the [config.yaml](config.yaml).
 ```
 python3 main.py
+```
+
+# TODO
+- Improve LLM/prompting for better tone determination.
+- Add support for Hindi.
+- Reduce multiple environments to one or independent services.
+
+# Additional fixes
+a. Explicitly add lib path to [stay away from dependency issues](https://github.com/m-bain/whisperX/issues/902#issuecomment-2646634513):
+```
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+```
+
+b. If you use torch>2.6, whisperX will likely give [another issue](https://github.com/m-bain/whisperX/issues/1304#issuecomment-3599713003). The suggested solution is
+```
+export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=true 
 ```
