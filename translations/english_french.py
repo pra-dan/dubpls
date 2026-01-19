@@ -11,24 +11,54 @@ class EnglishToFrenchTranslator(BaseTranslator):
 
     target_language = "fr"
     # Example FR-capable model; adjust as needed
-    model_path = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
+    # model_path = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
+    model_path = "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf"
+
+    # Each model has its own prompt format.
+    model_prompt_stencil = {
+        "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf": [
+            {
+                "role": "user",
+                "content": (
+                    "Translate the following text from English into French."
+                    "English: {text}\nFrench:"
+                ),
+            }
+        ],
+        "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a french text translator. Your task is to rewrite the input to change the tone to informal. \n\n"
+                    "Rules:\n"
+                    "1. Do NOT reply to the text. Only translate it.\n"
+                    "2. Keep the meaning and perspective exactly the same (if the original addresses Wilson, you address Wilson).\n"
+                    "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input."
+                ),
+            },
+            {
+                "role": "user",
+                "content": "{text}"
+            }
+        ],
+    }
 
     # def __init__(self, url):
     #     self.url = url
 
-    def translate_text(self, text) -> str:
+    def translate_text(self, text, context: str=None) -> str:
         headers = {"Content-Type": "application/json"}
+
+        # build the messages with the actual text
+        messages = []
+        for msg in self.model_prompt_stencil[self.model_path]:
+            messages.append({
+                "role": msg["role"],
+                "content": msg["content"].format(text=text)
+            })
+
         data = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": (
-                        "Translate the following text from English into French. "
-                        "Set the translation tone and formality using the fact that this is from a movie.\n"
-                        f"English: {text}\nFrench:"
-                    ),
-                }
-            ]
+            "messages": messages
         }
 
         try:
@@ -40,4 +70,18 @@ class EnglishToFrenchTranslator(BaseTranslator):
             print(f"Translation error (FR): {e}")
             return ""
 
-
+if __name__=='__main__':
+    """
+    curl -s \
+        --request POST \
+        --url http://127.0.0.1:8080/v1/chat/completions \
+        --header "Content-Type: application/json" \
+        --data '{
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Translate the following text from English into French. Keep the tone as informal and comedy. Keep the word count strictly between 10 and 12.\nEnglish: Mr. Wilson, you appear to have soiled yourself while on duty.\nFrench:"
+                }
+            ]
+        }'
+    """

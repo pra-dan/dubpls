@@ -36,7 +36,7 @@ class BaseTranslator(ABC):
     warmup_text = "if you see this, translation is working!"
 
     @abstractmethod
-    def translate_text(self, text) -> str:
+    def translate_text(self, text, context=None) -> str:
         """
         Translate the provided text into the target language.
         """
@@ -60,7 +60,9 @@ class BaseTranslator(ABC):
 
             for segment in tqdm(data.get("segments", [])):
                 src_text = segment.get("text", "")
-                translated = self.translate_text(src_text)
+                word_count = len(src_text.split())
+                context = f"Keep the word count strictly between {word_count-1} and {word_count+1} words"
+                translated = self.translate_text(src_text, context)
                 lang_key = self.target_language or "translation"
                 segment[lang_key] = translated
 
@@ -118,9 +120,17 @@ class BaseTranslator(ABC):
         response = self.translate_text(self.warmup_text)
         if response == "":
             print("Translation module isn't working as intended")
+            self._print_docker_error()
             return False
         else:
             print(response)
             return True
-
-
+    
+    def _print_docker_error(self):
+        cmd = [
+            "docker",
+            "container",
+            "logs",
+            f"{self.project_name}-{self.service_name}-1",
+        ]
+        subprocess.run(cmd, check=True, env=os.environ.copy())

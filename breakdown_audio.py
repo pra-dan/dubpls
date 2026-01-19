@@ -30,3 +30,11 @@ def breakdown_audio(audio_path):
     torchaudio.save(f"{base_name}_dialog.wav", all_target_dialog.cpu(), 44100)
     torchaudio.save(f"{base_name}_effect.wav", all_target_effect.cpu(), 44100)
     torchaudio.save(f"{base_name}_music.wav", all_target_music.cpu(), 44100)
+
+    # clean up
+    del model
+    del audio
+    del all_target_dialog
+    del all_target_effect
+    del all_target_music
+    torch.cuda.empty_cache()
