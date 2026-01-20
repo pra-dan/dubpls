@@ -15,7 +15,7 @@ Below is a quick demo of dubpls (work in progress :). Note how dubpls tries to p
       </a>
     </td>
     <td>
-      <a href="assets/2ssu_deadpool-2025-12-18_15.27.22_fr_jan12_1719.mp4">
+      <a href="assets/deadpool-2025-12-18_15.27.22_fr_jan20_1719.mp4">
         <img src="assets/thumbnail_dubbed.png" alt="Dubbed Video" width="100%">
       </a>
     </td>
