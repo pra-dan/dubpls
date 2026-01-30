@@ -40,7 +40,7 @@ def main():
         # scenes_clips = 
         
         # Translate T2T
-        # translate_segments(diary_json_path, config)
+        translate_segments(diary_json_path, config)
 
         # export json and test audio to env, for next stage
         # env = os.environ.copy()

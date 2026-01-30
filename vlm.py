@@ -1,100 +1,84 @@
-# from transformers import Qwen2_5_VLForConditionalGeneration, AutoTokenizer, AutoProcessor
-# from qwen_vl_utils import process_vision_info
+import cv2
+import base64
+import requests
+import json
+import math
 
-# # default: Load the model on the available device(s)
-# weights = "Qwen/Qwen2.5-VL-3B-Instruct"
-# model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-#     weights, torch_dtype="auto", device_map="auto"
-# )
+# --- Configuration ---
+API_URL = "http://127.0.0.1:8080/v1/chat/completions"
+# Path to your video file
+VIDEO_PATH = "/home/prashant/Documents/dubpls/merged_clips_per_segment/seg_000.mp4" 
 
-# # default processer
-# processor = AutoProcessor.from_pretrained(weights)
+def encode_image_to_base64(image):
+    """Encodes a CV2 image (frame) to a base64 string."""
+    _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+    return base64.b64encode(buffer).decode('utf-8')
 
-# messages = [
-#     {
-#         "role": "user",
-#         "content": [
-#             {
-#                 "type": "video",
-#                 "video": "file:///home/prashant/Documents/dubpls/assets/deadpool-2025-12-18_15.27.22.mp4",
-#                 "fps": 1
-#             },
-#             {"type": "text", "text": "Describe the tone of each conversation with timestamps."},
-#         ],
-#     }
-# ]
+def get_video_frames(video_path, max_frames=10):
+    """Extracts a limited number of frames to avoid context overflow."""
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print("Error opening video.")
+        return []
 
-# # Preparation for inference
-# text = processor.apply_chat_template(
-#     messages, tokenize=False, add_generation_prompt=True
-# )
-# image_inputs, video_inputs = process_vision_info(messages)
-# inputs = processor(
-#     text=[text],
-#     images=image_inputs,
-#     videos=video_inputs,
-#     padding=True,
-#     return_tensors="pt",
-# )
-# inputs = inputs.to("cuda")
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    interval = max(1, total_frames // max_frames)
+    
+    frames = []
+    count = 0
+    for i in range(0, total_frames, interval):
+        if len(frames) >= max_frames: break
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ret, frame = cap.read()
+        if ret:
+            # Resize large frames to reduce processing time
+            height, width = frame.shape[:2]
+            if width > 512:
+                scale = 512 / width
+                frame = cv2.resize(frame, (int(width*scale), int(height*scale)))
+            frames.append(encode_image_to_base64(frame))
+    
+    cap.release()
+    return frames
 
-# # Inference: Generation of the output
-# generated_ids = model.generate(**inputs, max_new_tokens=128)
-# generated_ids_trimmed = [
-#     out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-# ]
-# output_text = processor.batch_decode(
-#     generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-# )
-# print(output_text)
+def analyze_video():
+    frames = get_video_frames(VIDEO_PATH, max_frames=8) # Start small
+    if not frames: return
 
-from transformers import Qwen3VLForConditionalGeneration, AutoProcessor
+    # Construct Multimodal Message
+    # Llama-server expects content to be a list of text + image_url objects
+    ttext = "Analyze the key interaction in this video. \
+        1. Identify the gender of the last speaker. \
+        2. Describe the relationship between the speaker and listener (e.g., Intimate, Professional, Hostile). \
+        3. Describe the last speaker's emotion. \
+        4. Describe the visual setting in few words. \
+        Output in JSON format with keys being 'gender', 'relationship', 'emotion', 'setting']"
 
-# default: Load the model on the available device(s)
-model = Qwen3VLForConditionalGeneration.from_pretrained(
-    "Qwen/Qwen3-VL-4B-Instruct", dtype="auto", device_map="auto"
-)
+    content = [{"type": "text", "text": f"Reply in English. {ttext}"}]
+    
+    for b64_img in frames:
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}
+        })
 
-# We recommend enabling flash_attention_2 for better acceleration and memory saving, especially in multi-image and video scenarios.
-# model = Qwen3VLForConditionalGeneration.from_pretrained(
-#     "Qwen/Qwen3-VL-4B-Instruct",
-#     dtype=torch.bfloat16,
-#     attn_implementation="flash_attention_2",
-#     device_map="auto",
-# )
-
-processor = AutoProcessor.from_pretrained("Qwen/Qwen3-VL-4B-Instruct")
-
-messages = [
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "video",
-                "video": "file:///home/prashant/Documents/dubpls/assets/deadpool-2025-12-18_15.27.22.mp4",
-                "fps": 1
-            },
-            {"type": "text", "text": "Describe the tone of each conversation with timestamps."},
+    payload = {
+        "messages": [
+            {"role": "user", "content": content}
         ],
+        "temperature": 0.1,
+        "max_tokens": 1024
     }
-]
 
-# Preparation for inference
-inputs = processor.apply_chat_template(
-    messages,
-    tokenize=True,
-    add_generation_prompt=True,
-    return_dict=True,
-    return_tensors="pt"
-)
-inputs = inputs.to(model.device)
+    try:
+        response = requests.post(API_URL, json=payload)
+        response.raise_for_status()
+        print(response.json()['choices'][0]['message']['content'])
+    except Exception as e:
+        print(f"Error: {e}")
+        # Print server error detail if available
+        if hasattr(e, 'response') and e.response:
+            print(e.response.text)
 
-# Inference: Generation of the output
-generated_ids = model.generate(**inputs, max_new_tokens=128)
-generated_ids_trimmed = [
-    out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-]
-output_text = processor.batch_decode(
-    generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-)
-print(output_text)
+if __name__ == "__main__":
+    analyze_video()

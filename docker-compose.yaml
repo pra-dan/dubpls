@@ -8,7 +8,7 @@ services:
       -m ${MODEL_PATH}
       --port 8080
       --host 0.0.0.0
-      -n 512
+      -n 2048
       -fa on
     volumes:
       - ./models:/models

@@ -3,6 +3,28 @@ import requests
 
 from .base import BaseTranslator
 
+visual = {
+    "gender": "male",
+    "relationship": "professional",
+    "emotion": "serious",
+    "setting": "dimly lit room with soldiers in tactical gear"
+}
+
+common_context = """ 	
+    You are an expert screenwriter and translator specializing in French Dubbing. Your goal is to translate English dialogue into French while preserving the precise emotional tone, formality, and subtext of the scene.
+
+	Scene Context:
+
+	Setting: {visual.setting}
+
+	Speaker: {visual.gender} (Use appropriate gendered adjectives)
+
+	Relationship: {visual.relationship} (Use 'Tu' for intimate/hostile, 'Vous' for professional/distant)
+
+	Task: Translate the dialogue "{text}". Constraint: The translation must match the lip movements as closely as possible (isochrony). Output: Provide ONLY the French translation.
+    """
+    # Emotion: {audio.primary_emotion} / {visual.facial_expression} TODO: to be added to above context once ALM is added
+
 
 class EnglishToFrenchTranslator(BaseTranslator):
     """
@@ -11,8 +33,8 @@ class EnglishToFrenchTranslator(BaseTranslator):
 
     target_language = "fr"
     # Example FR-capable model; adjust as needed
-    # model_path = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
-    model_path = "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf"
+    model_path = "/models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf"
+    # model_path = "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf"
 
     # Each model has its own prompt format.
     model_prompt_stencil = {
@@ -20,12 +42,22 @@ class EnglishToFrenchTranslator(BaseTranslator):
             {
                 "role": "user",
                 "content": (
-                    "Translate the following text from English into French."
+                    "Context: {context}\nTranslate the following text from English into French."
                     "English: {text}\nFrench:"
                 ),
             }
         ],
         "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf": [
+            # {
+            #     "role": "system",
+            #     "content": (
+            #         "You are a french text translator. Your task is to rewrite the input to change the tone to informal. \n\n"
+            #         "Rules:\n"
+            #         "1. Do NOT reply to the text. Only translate it.\n"
+            #         "2. Keep the meaning and perspective exactly the same (if the original addresses Wilson, you address Wilson).\n"
+            #         "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input."
+            #     ),
+            # },
             {
                 "role": "system",
                 "content": (
@@ -33,7 +65,8 @@ class EnglishToFrenchTranslator(BaseTranslator):
                     "Rules:\n"
                     "1. Do NOT reply to the text. Only translate it.\n"
                     "2. Keep the meaning and perspective exactly the same (if the original addresses Wilson, you address Wilson).\n"
-                    "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input."
+                    "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input.\n"
+                    "4. Use the context: {context}"
                 ),
             },
             {
@@ -54,7 +87,7 @@ class EnglishToFrenchTranslator(BaseTranslator):
         for msg in self.model_prompt_stencil[self.model_path]:
             messages.append({
                 "role": msg["role"],
-                "content": msg["content"].format(text=text)
+                "content": msg["content"].format(context=common_context, text=text)
             })
 
         data = {

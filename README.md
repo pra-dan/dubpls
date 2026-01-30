@@ -236,6 +236,9 @@ b. If you use torch>2.6, whisperX will likely give [another issue](https://githu
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=true 
 ```
 
+msgs = [{'role': 'user', 'content': [image, question]}]
+
+
 ## img
 curl -s \
      --request POST --url http://127.0.0.1:8080/v1/chat/completions \
@@ -269,7 +272,7 @@ curl -s \
            "content": [
              {
                "type": "video",
-               "video": "file:///home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22.mp4",
+               "video": "file:///home/prashant/Documents/dubpls/merged_clips_per_segment/seg_000.mp4",
                "max_pixels": 2073600,
                "fps": 1.0
              },
