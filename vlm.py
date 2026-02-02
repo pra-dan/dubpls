@@ -4,7 +4,11 @@ import requests
 import json
 import math
 
-# --- Configuration ---
+"""
+Requires llama.cpp running at below endpoint
+models/MiniCPM-V-2_6-Q6_K.gguf + models/mmproj-model-f16.gguf
+"""
+
 API_URL = "http://127.0.0.1:8080/v1/chat/completions"
 # Path to your video file
 VIDEO_PATH = "/home/prashant/Documents/dubpls/merged_clips_per_segment/seg_000.mp4" 
@@ -41,18 +45,16 @@ def get_video_frames(video_path, max_frames=10):
     cap.release()
     return frames
 
-def analyze_video():
-    frames = get_video_frames(VIDEO_PATH, max_frames=8) # Start small
+def analyze_video(video_path=VIDEO_PATH):
+    frames = get_video_frames(video_path, max_frames=8) # Start small
     if not frames: return
 
     # Construct Multimodal Message
     # Llama-server expects content to be a list of text + image_url objects
     ttext = "Analyze the key interaction in this video. \
-        1. Identify the gender of the last speaker. \
-        2. Describe the relationship between the speaker and listener (e.g., Intimate, Professional, Hostile). \
-        3. Describe the last speaker's emotion. \
-        4. Describe the visual setting in few words. \
-        Output in JSON format with keys being 'gender', 'relationship', 'emotion', 'setting']"
+        1. Describe the relationship between all the speakers. (e.g., Intimate, Professional, Hostile). \
+        2. Describe the last speaker's emotion and tone. "
+        # 3. Describe the visual setting with focus on the end of the clip. \
 
     content = [{"type": "text", "text": f"Reply in English. {ttext}"}]
     
@@ -73,7 +75,7 @@ def analyze_video():
     try:
         response = requests.post(API_URL, json=payload)
         response.raise_for_status()
-        print(response.json()['choices'][0]['message']['content'])
+        return response.json()['choices'][0]['message']['content']
     except Exception as e:
         print(f"Error: {e}")
         # Print server error detail if available
@@ -81,4 +83,16 @@ def analyze_video():
             print(e.response.text)
 
 if __name__ == "__main__":
-    analyze_video()
+    # analyze_video(video_path)
+    # jpath = "/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
+    jpath = "temp.json"
+    with open(jpath, 'r', encoding="utf-8") as f:
+        data = json.load(f)
+
+    for idx, segment in enumerate(data.get("segments", [])):
+        vpath = segment.get("collected_scenes_path", "")
+        response = analyze_video(vpath)
+        data["segments"][idx]["video_context"] = response
+
+    with open(jpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)

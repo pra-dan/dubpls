@@ -34,12 +34,13 @@ def main():
         # if not hf_read_token:
         #     raise ValueError("No API token found. Set the API_TOKEN environment variable.")
         # # diary_json_path = diarize_with_forced_alignment(f"{base_name}_dialog.wav", hf_read_token)
-        diary_json_path = "media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
+        # diary_json_path = "media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
 
         # Extract scenes and derive context
-        # scenes_clips = 
+        
         
         # Translate T2T
+        diary_json_path = "temp.json"
         translate_segments(diary_json_path, config)
 
         # export json and test audio to env, for next stage

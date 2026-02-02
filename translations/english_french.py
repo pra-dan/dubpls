@@ -3,28 +3,15 @@ import requests
 
 from .base import BaseTranslator
 
-visual = {
-    "gender": "male",
-    "relationship": "professional",
-    "emotion": "serious",
-    "setting": "dimly lit room with soldiers in tactical gear"
-}
+COMMON_CONTEXT_TEMPLATE = """
+Scene Context: {visual_context}.
 
-common_context = """ 	
-    You are an expert screenwriter and translator specializing in French Dubbing. Your goal is to translate English dialogue into French while preserving the precise emotional tone, formality, and subtext of the scene.
+Speaker: {audio_speaker_gender} (Use appropriate gendered adjectives).
 
-	Scene Context:
+STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input.
 
-	Setting: {visual.setting}
-
-	Speaker: {visual.gender} (Use appropriate gendered adjectives)
-
-	Relationship: {visual.relationship} (Use 'Tu' for intimate/hostile, 'Vous' for professional/distant)
-
-	Task: Translate the dialogue "{text}". Constraint: The translation must match the lip movements as closely as possible (isochrony). Output: Provide ONLY the French translation.
-    """
-    # Emotion: {audio.primary_emotion} / {visual.facial_expression} TODO: to be added to above context once ALM is added
-
+Output: Provide ONLY the French translation.
+"""
 
 class EnglishToFrenchTranslator(BaseTranslator):
     """
@@ -79,15 +66,25 @@ class EnglishToFrenchTranslator(BaseTranslator):
     # def __init__(self, url):
     #     self.url = url
 
-    def translate_text(self, text, context: str=None) -> str:
+    def translate_text(self, segment) -> str:
         headers = {"Content-Type": "application/json"}
+
+        # update context
+        # speaker_gender = segment.get("audio_gender_classification","").get("label","")
+        speech_text = segment.get("text", "") 
+
+        agc = segment.get("audio_gender_classification")
+        speaker_gender = agc.get("label", "") if isinstance(agc, dict) else (agc if isinstance(agc, str) else "")
+
+        video_context = segment.get("video_context", "No visual context!")
+        common_context = COMMON_CONTEXT_TEMPLATE.format(visual_context=video_context, audio_speaker_gender=speaker_gender) 
 
         # build the messages with the actual text
         messages = []
         for msg in self.model_prompt_stencil[self.model_path]:
             messages.append({
                 "role": msg["role"],
-                "content": msg["content"].format(context=common_context, text=text)
+                "content": msg["content"].format(context=common_context, text=speech_text)
             })
 
         data = {
@@ -95,7 +92,7 @@ class EnglishToFrenchTranslator(BaseTranslator):
         }
 
         try:
-            response = requests.post(self.url, headers=headers, data=json.dumps(data))
+            response = requests.post(self.url, headers=headers, data=json.dumps(data)); print(data)
             response.raise_for_status()
             res_json = response.json()
             return res_json["choices"][0]["message"]["content"]
