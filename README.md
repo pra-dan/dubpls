@@ -15,7 +15,7 @@ Below is a quick demo of dubpls (work in progress :). Note how dubpls tries to p
       </a>
     </td>
     <td>
-      <a href="assets/deadpool-2025-12-18_15.27.22_fr_jan20_1719.mp4">
+      <a href="assets/deadpool-2025-12-18_15.27.22_fr_feb3_1657.mp4">
         <img src="assets/thumbnail_dubbed.png" alt="Dubbed Video" width="100%">
       </a>
     </td>
@@ -70,12 +70,66 @@ The issue with segments (#8: loss of word and #3: no voice cloning) is not with 
 #3: Is this supposed to be scary | Estce cense faire peur? -> no cloning | pre, post procN checked
 #8: Who are you? | Qui estu? -> too short prompt(text/audio)
 
-The author [suggests 5 to 10s of prompt audio](https://github.com/FunAudioLLM/CosyVoice/issues/1070#issuecomment-2727273122). -->
+The author [suggests 5 to 10s of prompt audio](https://github.com/FunAudioLLM/CosyVoice/issues/1070#issuecomment-2727273122). 
+
+## Jan 22
+The above issues were fixed by using the default prefix added to the prompt text in CosyVoice examples. Now, the only odd thing is the noticeable difference in the tone between reference/input audio and output. Next step would be adding some VLM for video scene understanding at low FPS and adding context to the common json. But deep-research suggests that I use difference XLMs for video and audio; the VLM tells us what scene it is while the ALM tells us whether the speaker is male/female and age, etc. Whether the speaker is yelling/laughing, is also derive-able from ALM.
+
+VLM: 
+- options: openbmb/MiniCPM-V-2_6-int4
+- Sample prompt: "Analyze the key interaction in this frame. 1. Identify the gender of the speaker. 2. Describe the relationship between the speaker and listener (e.g., Intimate, Professional, Hostile). 3. Describe the speaker's emotion. Output in JSON format."
+But how do we select the clip to use as input to VLM?
+
+ALM:
+- options: MiniCPM V2.6 (8B)
+- output is a classification with score
+
+System Prompt Template for Mistral-Nemo:
+
+	You are an expert screenwriter and translator specializing in French Dubbing. Your goal is to translate English dialogue into French while preserving the precise emotional tone, formality, and subtext of the scene.
+
+	Scene Context:
+
+	Setting: {visual.setting}
+
+	Speaker: {visual.speaker_gender} (Use appropriate gendered adjectives)
+
+	Relationship: {visual.proximity} (Use 'Tu' for intimate/hostile, 'Vous' for professional/distant)
+
+	Emotion: {audio.primary_emotion} / {visual.facial_expression}
+
+	Task: Translate the dialogue "{text}". Constraint: The translation must match the lip movements as closely as possible (isochrony). Output: Provide ONLY the French translation.
+
+(Optional) few-shot eg for 
+	To fix the "robotic" output, we must leverage Few-Shot Prompting. We should include 3-5 examples in the prompt that demonstrate how to handle different tones.
+
+	Example 1 (Angry/Informal): "Get out!" -> "Dégage!" (Not "Sortez").
+
+	Example 2 (Polite/Formal): "Get out." -> "Veuillez sortir."
+
+	Example 3 (Sad/Resigned): "I don't care." -> "C'est pas grave..." (Softened).
+
+(Optional) Re-check
+	Tone Consistency: Use a secondary LLM (e.g., GPT-4o-mini or a quantized 7B judge) to evaluate the output.
+
+	Prompt: "Does the French phrase 'Dégage' match the context 'Angry man shouting'? Yes/No."
+
+
+## Jan 28:
+For the scene context extraction using VLM, this can be the pipeline:
+- run scene detector and log start+end timestamps. Also save clips.
+- iterate through each segment in json and get its TS.
+- for each segment_ts, find at least 2 scenes before it (itself being the 3rd), OR the current scene upto first 7 seconds.
+
+End pipeline would be 
+... - STT(json) - scene_clipping + VLM + ALM - Translation (LLM) - ... 
+
+-->
 
 
 # Resources
 - [StreamSpeech - only support for Fr, En, Es, De](https://github.com/ictnlp/StreamSpeech)
-- [CosyVoice-3.0 TTS+zero-shot voice cloning](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) - works for Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian), 18+ Chinese dialects.
+- [CosyVoice-3.0 TTS+zero-shot voice cloning](https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512) - works for Chinese, English, Japanese, Korean, German, Spanish, French, Italian, Russian, 18+ Chinese dialects.
 - [Other En-Ch models](https://github.com/FunAudioLLM/CosyVoice?tab=readme-ov-file#evaluation) This can also be used as reference for other languages in future.
 - NVIDIA Nemotron (NIM) for cascaded system.
 - [Separation of voice, music and effects from singel audio - really cool eg from movies](https://cslikai.cn/TIGER/)
@@ -138,7 +192,7 @@ pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 d. Download the translation model weights and move to "models" directory
 | language | weights / quants |
 |--|--|
-|Hindi | [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) |
+| Hindi | [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) |
 | French | [mradermacher's quant of TowerInstruct-Mistral-7B](https://huggingface.co/mradermacher/TowerInstruct-Mistral-7B-v0.2-GGUF?show_file_info=TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf) |
 
 e. Get HF read-access token and add to env. From official WhisperX docs:

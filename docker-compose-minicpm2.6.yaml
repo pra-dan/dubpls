@@ -1,11 +1,9 @@
 services:
   llama-server:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
-    # entrypoint: ["sleep", "infinity"]
-     # -m /models/sarvam-translate.Q3_K_M.gguf
-     # -m /models/Apertus-8B-2509.Q4_K_M.gguf
     command: >
-      -m ${MODEL_PATH}
+      -m /models/MiniCPM-V-2_6-Q6_K.gguf
+      --mmproj /models/mmproj-model-f16.gguf
       --port 8080
       --host 0.0.0.0
       -n 2048
@@ -21,4 +19,3 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-              #device_ids: ['0']

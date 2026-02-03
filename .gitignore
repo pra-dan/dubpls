@@ -10,6 +10,9 @@ cache
 # Outputs
 media
 models
+merged_clips_per_segment
+scenes
+split_scenes
 
 # C extensions
 *.so
