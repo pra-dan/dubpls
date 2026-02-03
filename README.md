@@ -15,7 +15,7 @@ Below is a quick demo of dubpls (work in progress :). Note how dubpls tries to p
       </a>
     </td>
     <td>
-      <a href="assets/deadpool-2025-12-18_15.27.22_fr_jan20_1719.mp4">
+      <a href="assets/deadpool-2025-12-18_15.27.22_fr_feb3_1657.mp4">
         <img src="assets/thumbnail_dubbed.png" alt="Dubbed Video" width="100%">
       </a>
     </td>
@@ -192,7 +192,7 @@ pip install ttsfrd-0.4.2-cp310-cp310-linux_x86_64.whl
 d. Download the translation model weights and move to "models" directory
 | language | weights / quants |
 |--|--|
-|Hindi | [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) |
+| Hindi | [mradermacher's quant of Sarvam](https://huggingface.co/mradermacher/sarvam-translate-GGUF/blob/main/sarvam-translate.Q3_K_M.gguf) |
 | French | [mradermacher's quant of TowerInstruct-Mistral-7B](https://huggingface.co/mradermacher/TowerInstruct-Mistral-7B-v0.2-GGUF?show_file_info=TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf) |
 
 e. Get HF read-access token and add to env. From official WhisperX docs:
@@ -235,70 +235,3 @@ b. If you use torch>2.6, whisperX will likely give [another issue](https://githu
 ```
 export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=true 
 ```
-
-msgs = [{'role': 'user', 'content': [image, question]}]
-
-
-## img
-curl -s \
-     --request POST --url http://127.0.0.1:8080/v1/chat/completions \
-     --header "Content-Type: application/json" \
-     --data '{
-       "messages": [
-         {
-           "role": "user",
-           "content": [
-             {
-               "type": "image",
-               "image": "file:///home/prashant/Documents/dubpls/assets/thumbnail_dubbed.png"
-             },
-             {
-               "type": "text",
-               "text": "Describe this image."
-             }
-           ]
-         }
-       ]
-     }'
-
-## vid
-curl -s \
-     --request POST --url http://127.0.0.1:8080/v1/chat/completions \
-     --header "Content-Type: application/json" \
-     --data '{
-       "messages": [
-         {
-           "role": "user",
-           "content": [
-             {
-               "type": "video",
-               "video": "file:///home/prashant/Documents/dubpls/merged_clips_per_segment/seg_000.mp4",
-               "max_pixels": 2073600,
-               "fps": 1.0
-             },
-             {
-               "type": "text",
-               "text": "Describe this video."
-             }
-           ]
-         }
-       ]
-     }'
-
-
-
-
-messages = [
-    {
-        "role": "user",
-        "content": [
-            {
-                "type": "video",
-                "video": "file:///home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22.mp4",
-                "max_pixels": 1920 * 1080,
-                "fps": 1.0,
-            },
-            {"type": "text", "text": "Describe this video."},
-        ],
-    }
-]
