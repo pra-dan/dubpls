@@ -59,8 +59,8 @@ def diarize_with_forced_alignment(dialog_wav_path, hf_read_token):
         json.dump(result, json_file, ensure_ascii=False, indent=4)
         print("diarization results saved to ",json_path)
 
-    os.remove(model)
-    os.remove(diarize_model)
+    del(model)
+    del(diarize_model)
     gc.collect()
     return json_path
 

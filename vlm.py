@@ -18,19 +18,33 @@ def encode_image_to_base64(image):
     _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
     return base64.b64encode(buffer).decode('utf-8')
 
-def get_video_frames(video_path, max_frames=10):
+def get_video_frames(video_path, max_frames=10, start_time=None, end_time=None):
     """Extracts a limited number of frames to avoid context overflow."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         print("Error opening video.")
         return []
 
+    fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    interval = max(1, total_frames // max_frames)
+    
+    start_frame = int(start_time * fps) if start_time is not None else 0
+    end_frame = int(end_time * fps) if end_time is not None else total_frames
+    
+    if start_frame >= total_frames:
+        start_frame = 0
+    if end_frame > total_frames or end_frame <= start_frame:
+        end_frame = total_frames
+        
+    duration_frames = end_frame - start_frame
+    if duration_frames <= 0:
+        return []
+
+    interval = max(1, duration_frames // max_frames)
     
     frames = []
     count = 0
-    for i in range(0, total_frames, interval):
+    for i in range(start_frame, end_frame, interval):
         if len(frames) >= max_frames: break
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
         ret, frame = cap.read()
@@ -45,18 +59,16 @@ def get_video_frames(video_path, max_frames=10):
     cap.release()
     return frames
 
-def analyze_video(video_path=VIDEO_PATH):
-    frames = get_video_frames(video_path, max_frames=8) # Start small
-    if not frames: return
+def analyze_video(video_path=VIDEO_PATH, start_time=None, end_time=None, text=None):
+    frames = get_video_frames(video_path, max_frames=8, start_time=start_time, end_time=end_time) # Start small
+    if not frames: return ""
 
-    # Construct Multimodal Message
-    # Llama-server expects content to be a list of text + image_url objects
-    ttext = "Analyze the key interaction in this video. \
-        1. Describe the relationship between all the speakers. (e.g., Intimate, Professional, Hostile). \
-        2. Describe the last speaker's emotion and tone. "
-        # 3. Describe the visual setting with focus on the end of the clip. \
+    ttext = "You are a visual context analyzer for movie scenes. "
+    if text:
+        ttext += f"The current dialogue line is: '{text}'. "
+    ttext += "Based on the visual frames, provide a 1-sentence summary of the visual setting and the emotion/relationship of the characters. Do NOT hallucinate subtitles, do NOT output Chinese, and keep it very brief."
 
-    content = [{"type": "text", "text": f"Reply in English. {ttext}"}]
+    content = [{"type": "text", "text": ttext}]
     
     for b64_img in frames:
         content.append({

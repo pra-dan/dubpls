@@ -1,4 +1,4 @@
 target_language: fr # choices [hi, fr]
-av_file_path: media/deadpool-2025-12-18_15.27.22.mp4 # video+audio to dub
+av_file_path: media/trailer_fr.mp4 # video+audio to dub
 out_file_path: out
 # res_file_path: out/out_tiger_out_deadpool-2025-12-18_15.27.22.mp4

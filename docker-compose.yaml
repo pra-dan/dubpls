@@ -4,8 +4,9 @@ services:
     # entrypoint: ["sleep", "infinity"]
      # -m /models/sarvam-translate.Q3_K_M.gguf
      # -m /models/Apertus-8B-2509.Q4_K_M.gguf
+     # -m ${MODEL_PATH}
     command: >
-      -m ${MODEL_PATH}
+      -m /models/TowerInstruct-Mistral-7B-v0.2.Q6_K.gguf
       --port 8080
       --host 0.0.0.0
       -n 2048

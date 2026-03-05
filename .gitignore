@@ -4,6 +4,10 @@ cache
 *.py[codz]
 *$py.class
 
+# weights
+*.pt
+*.bin
+
 # env things
 *.env
 

@@ -4,13 +4,15 @@ import requests
 from .base import BaseTranslator
 
 COMMON_CONTEXT_TEMPLATE = """
-Scene Context: {visual_context}.
+Context from Video: {visual_context}
 
-Speaker: {audio_speaker_gender} (Use appropriate gendered adjectives).
+Speaker Gender: {audio_speaker_gender} (Ensure correct grammatical gender for self-referential words).
+Speaker Emotion: {audio_speaker_emotion} (Ensure the tone reflects this emotion).
 
-STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input.
-
-Output: Provide ONLY the French translation.
+Task: Translate the English text to French.
+- The translation must be colloquial.
+- STRICT LENGTH CONSTRAINT: The translation must match the duration/length of the source text perfectly.
+- Do NOT include quotes, explanations, or notes.
 """
 
 class EnglishToFrenchTranslator(BaseTranslator):
@@ -29,30 +31,26 @@ class EnglishToFrenchTranslator(BaseTranslator):
             {
                 "role": "user",
                 "content": (
-                    "Context: {context}\nTranslate the following text from English into French."
+                    "{context}\n\nTask: Translate this English movie dialogue into French for an R-rated comedic action movie.\n"
+                    "Rules for the translation:\n"
+                    "- MUST be extremely crude, colloquial/informal French (argot/slang).\n"
+                    "- ALWAYS use 'tu', 'te', 'toi'. NEVER use 'vous'. (e.g. use 't'es' instead of 'vous êtes').\n"
+                    "- If there is swearing or aggression (e.g. 'fuck out', 'bitch'), translate it to heavy French slang (e.g. 'casse-toi', 'putain', 'merde', 'connard', 'connerie').\n"
+                    "- Do not translate literally if there is a more natural aggressive/comedic French slang term.\n"
+                    "- Must strictly match the brevity/length of the English source.\n"
                     "English: {text}\nFrench:"
                 ),
             }
         ],
         "/models/Dolphin3.0-Llama3.1-8B.Q4_K_M.gguf": [
-            # {
-            #     "role": "system",
-            #     "content": (
-            #         "You are a french text translator. Your task is to rewrite the input to change the tone to informal. \n\n"
-            #         "Rules:\n"
-            #         "1. Do NOT reply to the text. Only translate it.\n"
-            #         "2. Keep the meaning and perspective exactly the same (if the original addresses Wilson, you address Wilson).\n"
-            #         "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input."
-            #     ),
-            # },
             {
                 "role": "system",
                 "content": (
-                    "You are a french text translator. Your task is to rewrite the input to change the tone to informal. \n\n"
+                    "You are an expert French dubbing translator for an R-rated comedic action movie. Your task is to translate English dialogue into highly colloquial, informal French. \n\n"
                     "Rules:\n"
-                    "1. Do NOT reply to the text. Only translate it.\n"
-                    "2. Keep the meaning and perspective exactly the same (if the original addresses Wilson, you address Wilson).\n"
-                    "3. STRICT LENGTH CONSTRAINT: The output must have approximately the same number of words as the input.\n"
+                    "1. Do NOT reply to the text or provide notes. Only output the translation.\n"
+                    "2. Use slang, informal phrasing (argot), and NEVER use 'vous' (always use 'tu').\n"
+                    "3. STRICT LENGTH CONSTRAINT: The output length must closely match the input.\n"
                     "4. Use the context: {context}"
                 ),
             },
@@ -69,15 +67,16 @@ class EnglishToFrenchTranslator(BaseTranslator):
     def translate_text(self, segment) -> str:
         headers = {"Content-Type": "application/json"}
 
-        # update context
-        # speaker_gender = segment.get("audio_gender_classification","").get("label","")
         speech_text = segment.get("text", "") 
 
         agc = segment.get("audio_gender_classification")
         speaker_gender = agc.get("label", "") if isinstance(agc, dict) else (agc if isinstance(agc, str) else "")
+        
+        aec = segment.get("audio_emotion_classification")
+        speaker_emotion = aec.get("label", "") if isinstance(aec, dict) else (aec if isinstance(aec, str) else "")
 
         video_context = segment.get("video_context", "No visual context!")
-        common_context = COMMON_CONTEXT_TEMPLATE.format(visual_context=video_context, audio_speaker_gender=speaker_gender) 
+        common_context = COMMON_CONTEXT_TEMPLATE.format(visual_context=video_context, audio_speaker_gender=speaker_gender, audio_speaker_emotion=speaker_emotion) 
 
         # build the messages with the actual text
         messages = []
