@@ -58,5 +58,29 @@ Stage 1: Context Extraction — Start the VLM container (`docker-compose-minicpm
 
 Stage 2: Translation — Stop the VLM container, start the Translation LLM (`docker-compose.yaml`), then run: `conda run -n whisperx2 python eval_and_improve.py --stage 2`.
 
-<!-- Run translation part in single go using `/home/prashant/anaconda3/envs/whisperx2/bin/python automate_pipeline.py --total 5` -->
+## Multi-Agent Workflow
 
+Two Cursor agents work together to iteratively improve translation quality:
+
+| Agent | Definition | Role |
+|---|---|---|
+| **Translator** | `.cursor/agents/translator.md` | Runs the pipeline, edits prompts/models/context in `translations/english_french.py`, downloads new models |
+| **Reviewer** | `.cursor/agents/reviewer.md` | Runs `review_translation.py`, evaluates output vs GT (BLEU, chrF, length ratio), writes structured feedback |
+
+### Improvement loop
+
+1. **Translator** runs: `automate_pipeline.py --total N --review`
+2. **Reviewer** reads `media/review_feedback.json`, identifies worst segments and patterns, writes recommendations
+3. **Translator** reads recommendations, makes targeted changes (prompt edits, model switch, context improvements)
+4. **Translator** re-runs: `automate_pipeline.py --skip-stage1 --total N --review` (only re-translates)
+5. **Reviewer** evaluates again, compares with previous iteration
+6. Repeat until metrics plateau
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `automate_pipeline.py` | Automated pipeline orchestrator (`--review` flag triggers evaluation) |
+| `review_translation.py` | Standalone evaluation → `media/review_feedback.json` |
+| `translations/english_french.py` | Prompts, model selection, context templates (edited by Translator) |
+| `media/review_feedback.json` | Structured feedback (written by Reviewer, read by Translator) |

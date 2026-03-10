@@ -12,6 +12,7 @@ Usage:
   /home/prashant/anaconda3/envs/whisperx2/bin/python automate_pipeline.py --total 5
   /home/prashant/anaconda3/envs/whisperx2/bin/python automate_pipeline.py --dry-run
   /home/prashant/anaconda3/envs/whisperx2/bin/python automate_pipeline.py --skip-stage1
+  /home/prashant/anaconda3/envs/whisperx2/bin/python automate_pipeline.py --skip-stage1 --review
 """
 import argparse
 import json
@@ -33,6 +34,7 @@ TRANSLATION_COMPOSE = os.path.join(PROJECT_ROOT, "docker-compose.yaml")
 DEFAULT_JSON = os.path.join(PROJECT_ROOT, "media", "en_fr.json")
 STAGE1_JSON = os.path.join(PROJECT_ROOT, "media", "en_fr_eval_stage1.json")
 OUTPUT_JSON = os.path.join(PROJECT_ROOT, "media", "en_fr_eval_output.json")
+REVIEW_JSON = os.path.join(PROJECT_ROOT, "media", "review_feedback.json")
 
 DEFAULT_AUDIO = os.path.join(
     PROJECT_ROOT, "media", "deadpool-2025-12-18_15.27.22_extracted_dialog.wav"
@@ -361,6 +363,11 @@ def main():
         default=HEALTH_TIMEOUT,
         help=f"Seconds to wait for container health (default: {HEALTH_TIMEOUT})",
     )
+    parser.add_argument(
+        "--review",
+        action="store_true",
+        help="Run review_translation.py after translation to produce review_feedback.json.",
+    )
 
     args = parser.parse_args()
 
@@ -450,6 +457,16 @@ def main():
     # EVALUATION
     # ===================================================================
     evaluate(data, args.total)
+
+    # ===================================================================
+    # REVIEW (optional) — structured feedback for Reviewer agent
+    # ===================================================================
+    if args.review:
+        print(f"\n{'='*60}")
+        print("[Review] Running review_translation.py ...")
+        print(f"{'='*60}")
+        from review_translation import review as run_review
+        run_review(OUTPUT_JSON, args.total, REVIEW_JSON)
 
     print(f"\n{'='*60}")
     print("  Pipeline complete!")
