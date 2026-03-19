@@ -443,30 +443,25 @@ def main():
                 sys.exit(1)
 
             data = run_translation(data, args.total)
+
+            # Save final results before review (so review can read them)
+            with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            print(f"\n[✓] Final results saved to: {OUTPUT_JSON}")
+
+            # Run LLM-judge review while container is still up
+            if args.review:
+                print(f"\n{'='*60}")
+                print("[Review] Running LLM-as-judge evaluation ...")
+                print(f"{'='*60}")
+                from review_translation import review as run_review
+                run_review(OUTPUT_JSON, args.total, REVIEW_JSON)
         finally:
             stop_container(TRANSLATION_COMPOSE)
-
-        # Save final results
-        with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"\n[✓] Final results saved to: {OUTPUT_JSON}")
     else:
         print("[Skip] Stage 2 skipped.")
 
-    # ===================================================================
-    # EVALUATION
-    # ===================================================================
     evaluate(data, args.total)
-
-    # ===================================================================
-    # REVIEW (optional) — structured feedback for Reviewer agent
-    # ===================================================================
-    if args.review:
-        print(f"\n{'='*60}")
-        print("[Review] Running review_translation.py ...")
-        print(f"{'='*60}")
-        from review_translation import review as run_review
-        run_review(OUTPUT_JSON, args.total, REVIEW_JSON)
 
     print(f"\n{'='*60}")
     print("  Pipeline complete!")

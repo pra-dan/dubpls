@@ -2,15 +2,12 @@
 """
 Translation quality reviewer for dubpls.
 
-Evaluates translated segments against ground-truth French text and writes
-structured feedback to media/review_feedback.json.  Designed to be run by
-the Reviewer agent or as part of the automated pipeline.
+Uses an LLM-as-judge approach: sends each (english, translation, gt) triple
+to the model at http://127.0.0.1:8080 and asks it to score the translation
+on a 1-5 rubric (character count, intent, formality, person references,
+colloquialism).
 
-Metrics:
-  - Exact match
-  - Sentence-level BLEU  (sacrebleu)
-  - chrF                 (sacrebleu)
-  - Length ratio          len(pred) / len(gt)
+Requires: a llama.cpp server running on port 8080.
 
 Usage:
   /home/prashant/anaconda3/envs/whisperx2/bin/python review_translation.py \\
@@ -19,102 +16,157 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
+import time
 from typing import Any
 
-import sacrebleu
+import requests
+
+# ---------------------------------------------------------------------------
+# LLM Judge configuration
+# ---------------------------------------------------------------------------
+LLM_URL = "http://127.0.0.1:8080/v1/chat/completions"
+
+JUDGE_PROMPT = """You will be given an Input text (English), a translated text (French), and a ground-truth reference translation (French).
+Your task is to provide a 'total rating' scoring how well the translated text translates the Input text.
+Give your answer on a scale of 1 to 5, where 1 means that the translated text is not helpful at all, and 5 means that the translated text completely and helpfully translates the user input.
+
+Rubric (each criterion is worth +1 point):
++1 if the number of words in the translated text is offset by less than 2 words (more or fewer) compared to the ground-truth reference translation.
++1 if the intent of the Input text is retained in the translated text.
++1 if the tone of formality (professional, casual, vulgar, etc) of the translated text matches the ground-truth reference translation.
++1 if people are referred to correctly — e.g. gender is not mixed up, correct choice between tu/toi vs vous, etc.
++1 if the colloquialism level of the translated text matches the ground-truth reference translation.
+
+Provide your feedback as follows:
+
+Feedback:::
+Evaluation: (your rationale for the rating, as a text)
+Total rating: (your rating, as a number between 1 and 5)
+
+You MUST provide values for 'Evaluation:' and 'Total rating:' in your answer.
+
+Now here are the question and answer.
+
+Input text: {english_text}
+translated text: {translated_text}
+gt_translation_text: {gt_text}
+
+Provide your feedback. If you give a correct rating, I'll give you 100 H100 GPUs to start your AI company and lots of carrots.
+Feedback:::
+Evaluation: """
 
 
 # ---------------------------------------------------------------------------
-# Metric helpers
+# LLM call helper
 # ---------------------------------------------------------------------------
-def sentence_bleu(pred: str, ref: str) -> float:
-    """Return sentence-level BLEU (0–100)."""
-    return sacrebleu.sentence_bleu(pred, [ref]).score
+def call_llm_judge(english: str, translated: str, gt: str, retries: int = 2) -> dict:
+    """
+    Send the judge prompt to the LLM and parse the rating + evaluation.
+    Returns {"rating": int, "evaluation": str} or defaults on failure.
+    """
+    prompt = JUDGE_PROMPT.format(
+        english_text=english,
+        translated_text=translated,
+        gt_text=gt,
+    )
+
+    payload = {
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1,
+        "max_tokens": 512,
+    }
+
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(LLM_URL, json=payload, timeout=60)
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            return parse_judge_response(content)
+        except Exception as e:
+            if attempt < retries:
+                time.sleep(2)
+            else:
+                print(f"  [!] LLM judge error: {e}")
+                return {"rating": 0, "evaluation": f"LLM call failed: {e}"}
 
 
-def sentence_chrf(pred: str, ref: str) -> float:
-    """Return sentence-level chrF (0–100)."""
-    return sacrebleu.sentence_chrf(pred, [ref]).score
+def parse_judge_response(text: str) -> dict:
+    """
+    Extract 'Total rating:' and evaluation text from the judge response.
+    """
+    rating = 0
+    evaluation = text.strip()
 
+    # Try to find "Total rating: N"
+    match = re.search(r"Total\s+rating\s*:\s*(\d+)", text, re.IGNORECASE)
+    if match:
+        rating = int(match.group(1))
+        rating = max(1, min(5, rating))  # clamp to 1-5
 
-def length_ratio(pred: str, ref: str) -> float:
-    """Return character-level length ratio pred/ref (1.0 = perfect)."""
-    if not ref:
-        return 0.0
-    return len(pred) / len(ref)
+    # Try to extract evaluation text before "Total rating:"
+    eval_match = re.search(
+        r"Evaluation\s*:\s*(.*?)(?:Total\s+rating|$)", text, re.DOTALL | re.IGNORECASE
+    )
+    if eval_match:
+        evaluation = eval_match.group(1).strip()
+
+    return {"rating": rating, "evaluation": evaluation}
 
 
 # ---------------------------------------------------------------------------
-# Issue detection
-# ---------------------------------------------------------------------------
-def detect_issues(pred: str, gt: str, lr: float) -> list[str]:
-    """Return a list of human-readable issue tags for one segment."""
-    issues: list[str] = []
-
-    if lr > 1.3:
-        issues.append("too_long")
-    elif lr < 0.7:
-        issues.append("too_short")
-
-    # Register check — 'vous' should not appear in informal French
-    pred_lower = pred.lower()
-    if "vous" in pred_lower.split():
-        issues.append("formal_vous_detected")
-
-    # Empty or near-empty prediction
-    if not pred.strip():
-        issues.append("empty_translation")
-
-    # Untranslated — prediction is suspiciously close to English source
-    # (simple heuristic: check if pred equals original English)
-    # This is checked at the caller level where English text is available.
-
-    return issues
-
-
-# ---------------------------------------------------------------------------
-# Build recommendations from aggregate stats
+# Build recommendations from aggregate results
 # ---------------------------------------------------------------------------
 def build_recommendations(segment_results: list[dict]) -> list[str]:
     """Analyze segment-level results and produce actionable recommendations."""
     recs: list[str] = []
 
-    long_segs = [r["idx"] for r in segment_results if "too_long" in r.get("issues", [])]
-    short_segs = [r["idx"] for r in segment_results if "too_short" in r.get("issues", [])]
-    vous_segs = [r["idx"] for r in segment_results if "formal_vous_detected" in r.get("issues", [])]
-    empty_segs = [r["idx"] for r in segment_results if "empty_translation" in r.get("issues", [])]
-    low_bleu = [r["idx"] for r in segment_results if r.get("bleu", 100) < 10]
+    low_score_segs = [r["idx"] for r in segment_results if r.get("rating", 5) <= 2]
+    mid_score_segs = [r["idx"] for r in segment_results if r.get("rating", 5) == 3]
 
-    if long_segs:
+    # Scan evaluations for common patterns
+    all_evals = " ".join(r.get("evaluation", "") for r in segment_results).lower()
+
+    if "length" in all_evals or "word" in all_evals or "long" in all_evals or "short" in all_evals:
         recs.append(
-            f"Segments {long_segs} are too long (len_ratio > 1.3). "
-            "Tighten the length constraint in the translation prompt or add a "
-            "max-word-count rule tied to the source word count."
+            "Length mismatches detected. Tighten the length constraint in the "
+            "translation prompt or add a max-word-count rule tied to the source word count."
         )
-    if short_segs:
+    if "vous" in all_evals or "formal" in all_evals:
         recs.append(
-            f"Segments {short_segs} are too short (len_ratio < 0.7). "
-            "The model may be truncating output. Check max_tokens or prompt formatting."
+            "Formality/register issues detected. Reinforce the tu/toi rule in "
+            "the prompt or add a post-processing step to replace 'vous' → 'tu'."
         )
-    if vous_segs:
+    if "gender" in all_evals:
         recs.append(
-            f"Segments {vous_segs} use formal 'vous'. "
-            "Reinforce the tu/toi rule in the prompt or add a post-processing step to replace 'vous' → 'tu'."
+            "Gender reference issues detected. Ensure the audio_gender_classification "
+            "is being injected into the prompt and the model follows it."
         )
-    if empty_segs:
+    if "tone" in all_evals or "colloquial" in all_evals or "slang" in all_evals:
         recs.append(
-            f"Segments {empty_segs} produced empty translations. "
-            "Check LLM server health, prompt formatting, or request timeout."
+            "Tone/colloquialism mismatch detected. Strengthen slang/vulgar register "
+            "instructions in the prompt or provide examples of expected output."
         )
-    if low_bleu:
+    if "intent" in all_evals or "meaning" in all_evals:
         recs.append(
-            f"Segments {low_bleu} have very low BLEU (<10). "
-            "Consider switching model, improving context injection, or adjusting temperature."
+            "Intent/meaning loss detected. Consider switching to a stronger translation "
+            "model or improving context injection."
+        )
+
+    if low_score_segs:
+        recs.append(
+            f"Segments {low_score_segs} scored ≤2/5. These need the most attention — "
+            "review the judge evaluations for specific failure patterns."
+        )
+    if mid_score_segs:
+        recs.append(
+            f"Segments {mid_score_segs} scored 3/5. Minor improvements needed — "
+            "check the per-segment evaluations for targeted fixes."
         )
 
     if not recs:
-        recs.append("All segments look reasonable. Consider fine-tuning prompts for further marginal gains.")
+        recs.append("All segments scored well. Consider fine-tuning prompts for further marginal gains.")
 
     return recs
 
@@ -123,7 +175,7 @@ def build_recommendations(segment_results: list[dict]) -> list[str]:
 # Main evaluation
 # ---------------------------------------------------------------------------
 def review(json_path: str, total: int, output_path: str) -> dict[str, Any]:
-    """Run full evaluation and write review_feedback.json."""
+    """Run LLM-as-judge evaluation and write review_feedback.json."""
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -131,12 +183,10 @@ def review(json_path: str, total: int, output_path: str) -> dict[str, Any]:
     total = min(len(segments), total)
 
     segment_results = []
-    exact_matches = 0
-    bleu_sum = 0.0
-    chrf_sum = 0.0
+    rating_sum = 0
 
-    print(f"\n{'Seg':>4}  {'BLEU':>6}  {'chrF':>6}  {'LenR':>5}  {'Match':>5}  {'Issues'}")
-    print("-" * 80)
+    print(f"\n{'Seg':>4}  {'Score':>5}  {'Evaluation (first 80 chars)'}")
+    print("-" * 100)
 
     for i in range(total):
         seg = segments[i]
@@ -145,55 +195,47 @@ def review(json_path: str, total: int, output_path: str) -> dict[str, Any]:
         english = (seg.get("text") or "").strip()
 
         if not gt:
-            # No ground truth to compare — skip
             continue
 
-        bleu = sentence_bleu(pred, gt)
-        chrf = sentence_chrf(pred, gt)
-        lr = length_ratio(pred, gt)
-        exact = pred == gt and pred != ""
+        if not pred:
+            result = {
+                "idx": i,
+                "english": english,
+                "pred": pred,
+                "gt": gt,
+                "rating": 0,
+                "evaluation": "Empty translation — no output from translator.",
+            }
+        else:
+            judge_result = call_llm_judge(english, pred, gt)
+            result = {
+                "idx": i,
+                "english": english,
+                "pred": pred,
+                "gt": gt,
+                "rating": judge_result["rating"],
+                "evaluation": judge_result["evaluation"],
+            }
 
-        issues = detect_issues(pred, gt, lr)
-        # Check for untranslated text
-        if pred and english and pred.strip().lower() == english.strip().lower():
-            issues.append("untranslated")
-
-        if exact:
-            exact_matches += 1
-        bleu_sum += bleu
-        chrf_sum += chrf
-
-        result = {
-            "idx": i,
-            "english": english,
-            "pred": pred,
-            "gt": gt,
-            "bleu": round(bleu, 1),
-            "chrf": round(chrf, 1),
-            "length_ratio": round(lr, 2),
-            "exact_match": exact,
-            "issues": issues,
-        }
         segment_results.append(result)
+        rating_sum += result["rating"]
 
-        flag = "✓" if exact else "✗"
-        issues_str = ", ".join(issues) if issues else "—"
-        print(f"{i:>4}  {bleu:>6.1f}  {chrf:>6.1f}  {lr:>5.2f}  {flag:>5}  {issues_str}")
+        eval_preview = result["evaluation"][:80].replace("\n", " ")
+        print(f"{i:>4}  {result['rating']:>3}/5  {eval_preview}")
 
     evaluated = len(segment_results)
-    avg_bleu = bleu_sum / evaluated if evaluated else 0
-    avg_chrf = chrf_sum / evaluated if evaluated else 0
-    exact_pct = (exact_matches / evaluated * 100) if evaluated else 0
+    avg_rating = rating_sum / evaluated if evaluated else 0
+    perfect_count = sum(1 for r in segment_results if r["rating"] == 5)
+    perfect_pct = (perfect_count / evaluated * 100) if evaluated else 0
 
-    print(f"\n{'='*80}")
+    print(f"\n{'='*100}")
     print(f"  Segments evaluated : {evaluated}")
-    print(f"  Exact matches      : {exact_matches}/{evaluated} ({exact_pct:.1f}%)")
-    print(f"  Average BLEU       : {avg_bleu:.1f}")
-    print(f"  Average chrF       : {avg_chrf:.1f}")
-    print(f"{'='*80}")
+    print(f"  Average score      : {avg_rating:.1f} / 5")
+    print(f"  Perfect scores     : {perfect_count}/{evaluated} ({perfect_pct:.1f}%)")
+    print(f"{'='*100}")
 
-    # Sort worst segments by BLEU ascending
-    worst = sorted(segment_results, key=lambda r: r["bleu"])[:10]
+    # Sort worst segments by rating ascending
+    worst = sorted(segment_results, key=lambda r: r["rating"])[:10]
     recommendations = build_recommendations(segment_results)
 
     print("\n📋 Recommendations:")
@@ -203,10 +245,9 @@ def review(json_path: str, total: int, output_path: str) -> dict[str, Any]:
     feedback = {
         "overall": {
             "segments_evaluated": evaluated,
-            "exact_matches": exact_matches,
-            "exact_match_pct": round(exact_pct, 1),
-            "avg_bleu": round(avg_bleu, 1),
-            "avg_chrf": round(avg_chrf, 1),
+            "avg_rating": round(avg_rating, 2),
+            "perfect_scores": perfect_count,
+            "perfect_pct": round(perfect_pct, 1),
         },
         "per_segment": segment_results,
         "worst_segments": worst,
@@ -229,7 +270,7 @@ def main():
     default_output = os.path.join(project_root, "media", "review_feedback.json")
 
     parser = argparse.ArgumentParser(
-        description="Evaluate translations against ground truth and write structured feedback.",
+        description="Evaluate translations using LLM-as-judge rubric and write structured feedback.",
     )
     parser.add_argument(
         "--json-path",
