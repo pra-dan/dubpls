@@ -142,6 +142,9 @@ End pipeline would be
 - [Fine-tune indic TTS](https://snorbyte.com/blog/train-sota-multilingual-indic-tts)
 - [this fine-tune of neutts-air](https://huggingface.co/jaeyong2/neutts-air-hi-preview)
 - [Comparative study on Prosody](https://arxiv.org/pdf/2511.02104)
+On speaker emotion classification
+- [emotion recognition based on textual features](https://aclanthology.org/2022.aacl-main.12.pdf)
+- 
 ----- 
 
 # Setup

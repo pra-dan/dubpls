@@ -164,25 +164,42 @@ def run_vlm_context(data: dict, video_path: str, total: int) -> dict:
     print("[Stage 1] VLM video context extraction")
     print(f"{'='*60}")
 
-    from vlm import analyze_video
+    import asyncio
+    from agent_models import Segment
+    from vlm_agent import extract_visual_context
 
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
-    for i in range(total):
-        seg = segments[i]
-        start_time = seg.get("start")
-        end_time = seg.get("end")
+    async def _process_all():
+        for i in range(total):
+            seg_dict = segments[i]
+            
+            seg = Segment(
+                text=seg_dict.get("text", ""),
+                start=seg_dict.get("start", 0.0),
+                end=seg_dict.get("end", 0.0),
+                speaker=seg_dict.get("speaker", "unknown"),
+                collected_scenes_path=seg_dict.get("collected_scenes_path", video_path),
+                audio_gender_classification=seg_dict.get("audio_gender_classification"),
+                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
+                video_context=seg_dict.get("video_context"),
+                translation=seg_dict.get("translation"),
+                fr=seg_dict.get("fr"),
+                fr_gt=seg_dict.get("fr_gt")
+            )
+            
+            try:
+                video_context = await extract_visual_context(seg)
+                seg_dict["video_context"] = video_context
+            except Exception as e:
+                print(f"  [!] VLM error on segment {i}: {e}")
+                seg_dict["video_context"] = ""
 
-        try:
-            video_context = analyze_video(video_path, start_time, end_time)
-            seg["video_context"] = video_context if video_context else ""
-        except Exception as e:
-            print(f"  [!] VLM error on segment {i}: {e}")
-            seg["video_context"] = ""
+            if (i + 1) % 5 == 0 or i + 1 == total:
+                print(f"  Processed {i+1}/{total} segments")
 
-        if (i + 1) % 5 == 0 or i + 1 == total:
-            print(f"  Processed {i+1}/{total} segments")
+    asyncio.run(_process_all())
 
     print("[Stage 1] Done.")
     return data
@@ -192,28 +209,45 @@ def run_vlm_context(data: dict, video_path: str, total: int) -> dict:
 # Stage 2 — Translation (requires TowerInstruct container)
 # ---------------------------------------------------------------------------
 def run_translation(data: dict, total: int) -> dict:
-    """Translate each segment using the Translation LLM."""
+    """Translate each segment using the Translation Agent."""
     print(f"\n{'='*60}")
     print("[Stage 2] Translation (English → French)")
     print(f"{'='*60}")
 
-    from translations.english_french import EnglishToFrenchTranslator
+    import asyncio
+    from agent_models import Segment
+    from translator_agent import translate_segment
 
-    translator = EnglishToFrenchTranslator()
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
-    for i in range(total):
-        seg = segments[i]
-        try:
-            translation = translator.translate_text(seg)
-            seg["translation"] = translation
-        except Exception as e:
-            print(f"  [!] Translation error on segment {i}: {e}")
-            seg["translation"] = ""
+    async def _process_all():
+        for i in range(total):
+            seg_dict = segments[i]
+            seg = Segment(
+                text=seg_dict.get("text", ""),
+                start=seg_dict.get("start", 0.0),
+                end=seg_dict.get("end", 0.0),
+                speaker=seg_dict.get("speaker", "unknown"),
+                collected_scenes_path=seg_dict.get("collected_scenes_path"),
+                audio_gender_classification=seg_dict.get("audio_gender_classification"),
+                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
+                video_context=seg_dict.get("video_context"),
+                translation=seg_dict.get("translation"),
+                fr=seg_dict.get("fr"),
+                fr_gt=seg_dict.get("fr_gt")
+            )
+            try:
+                translation = await translate_segment(seg)
+                seg_dict["translation"] = translation
+            except Exception as e:
+                print(f"  [!] Translation error on segment {i}: {e}")
+                seg_dict["translation"] = ""
 
-        if (i + 1) % 5 == 0 or i + 1 == total:
-            print(f"  Translated {i+1}/{total} segments")
+            if (i + 1) % 5 == 0 or i + 1 == total:
+                print(f"  Translated {i+1}/{total} segments")
+
+    asyncio.run(_process_all())
 
     print("[Stage 2] Done.")
     return data
@@ -222,8 +256,16 @@ def run_translation(data: dict, total: int) -> dict:
 # ---------------------------------------------------------------------------
 # Evaluation — compare translations against ground truth
 # ---------------------------------------------------------------------------
+
 def evaluate(data: dict, total: int) -> None:
-    """Compare translated text with ground-truth French text."""
+    """Compare translated text with ground‑truth French text.
+
+    The previous implementation only counted exact string matches, which is
+    overly strict for natural language translation. We now compute a simple
+    word‑overlap ratio (intersection over union) and report it as *Word
+    Overlap Accuracy*. If a `review_feedback.json` file exists (generated by
+    the reviewer agent), we also surface the average rating from that file.
+    """
     print(f"\n{'='*60}")
     print("[Eval] Comparing translations with ground truth")
     print(f"{'='*60}")
@@ -231,6 +273,8 @@ def evaluate(data: dict, total: int) -> None:
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
+    # Track word‑overlap statistics
+    overlap_sum = 0.0
     exact_matches = 0
     results = []
 
@@ -238,32 +282,56 @@ def evaluate(data: dict, total: int) -> None:
         seg = segments[i]
         pred = (seg.get("translation") or "").strip()
         gt = (seg.get("fr_gt") or "").strip()
+        # Exact match (kept for backward compatibility)
         match = pred == gt and pred != ""
-
         if match:
             exact_matches += 1
 
-        results.append(
-            {
-                "idx": i,
-                "english": seg.get("text", ""),
-                "prediction": pred,
-                "gt": gt,
-                "exact_match": match,
-            }
-        )
+        # Simple word‑overlap (Jaccard‑like) metric
+        pred_words = set(pred.split())
+        gt_words = set(gt.split())
+        if pred_words or gt_words:
+            overlap = len(pred_words & gt_words) / len(pred_words | gt_words)
+        else:
+            overlap = 0.0
+        overlap_sum += overlap
 
-    # Print summary table
-    print(f"\n{'Seg':>4}  {'Match':>5}  {'Prediction (first 50 chars)':50}  {'GT (first 50 chars)':50}")
-    print("-" * 115)
+        results.append({
+            "idx": i,
+            "english": seg.get("text", ""),
+            "prediction": pred,
+            "gt": gt,
+            "exact_match": match,
+            "word_overlap": f"{overlap:.2f}",
+        })
+
+    avg_overlap = overlap_sum / total if total else 0.0
+
+    # Print detailed table
+    print(f"\n{'Seg':>4}  {'Exact':>5}  {'Overlap':>7}  {'Prediction (first 50 chars)':50}  {'GT (first 50 chars)':50}")
+    print("-" * 130)
     for r in results:
-        flag = "  ✓" if r["exact_match"] else "  ✗"
+        flag = "✓" if r["exact_match"] else "✗"
         print(
-            f"{r['idx']:>4}  {flag:>5}  {r['prediction'][:50]:50}  {r['gt'][:50]:50}"
+            f"{r['idx']:>4}  {flag:>5}  {r['word_overlap']:>7}  {r['prediction'][:50]:50}  {r['gt'][:50]:50}"
         )
 
-    print(f"\nExact matches: {exact_matches}/{total}")
-    print(f"Accuracy: {exact_matches/total*100:.1f}%" if total else "N/A")
+    # print(f"\nExact matches: {exact_matches}/{total}")
+    print(f"Word‑overlap accuracy: {avg_overlap*100:.1f}%")
+
+    # If a review JSON is present, report its average rating
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        review_path = _Path('media/review_feedback.json')
+        if review_path.is_file():
+            with open(review_path, 'r', encoding='utf-8') as f:
+                review = _json.load(f)
+            avg_rating = review.get('overall', {}).get('avg_rating')
+            if avg_rating is not None:
+                print(f"Reviewer average rating: {avg_rating:.2f} / 5")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -435,29 +503,21 @@ def main():
     # STAGE 2: Translation
     # ===================================================================
     if not args.skip_stage2:
-        try:
-            start_container(TRANSLATION_COMPOSE)
-            if not wait_for_health(args.health_timeout):
-                print("[E] Translation container failed to become healthy. Aborting.")
-                stop_container(TRANSLATION_COMPOSE)
-                sys.exit(1)
+        data = run_translation(data, args.total)
 
-            data = run_translation(data, args.total)
+        # Save final results before review (so review can read them)
+        with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"\n[✓] Final results saved to: {OUTPUT_JSON}")
 
-            # Save final results before review (so review can read them)
-            with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            print(f"\n[✓] Final results saved to: {OUTPUT_JSON}")
-
-            # Run LLM-judge review while container is still up
-            if args.review:
-                print(f"\n{'='*60}")
-                print("[Review] Running LLM-as-judge evaluation ...")
-                print(f"{'='*60}")
-                from review_translation import review as run_review
-                run_review(OUTPUT_JSON, args.total, REVIEW_JSON)
-        finally:
-            stop_container(TRANSLATION_COMPOSE)
+        # Run LLM-judge review 
+        if args.review:
+            print(f"\n{'='*60}")
+            print("[Review] Running LLM-as-judge evaluation ...")
+            print(f"{'='*60}")
+            import asyncio
+            from review_translation import review as run_review
+            asyncio.run(run_review(OUTPUT_JSON, args.total, REVIEW_JSON))
     else:
         print("[Skip] Stage 2 skipped.")
 
