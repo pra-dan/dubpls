@@ -219,8 +219,19 @@ sudo docker compose up # uses port 8080
 
 # Run pipeline 
 Choose language in the [config.yaml](config.yaml).
-```
+```sh
 python3 main.py
+
+# Only stage 1 (Separate A+V, get video+audio context) 
+# Uses Gemini for BOTH dialogue profiling and translation
+clear && python3 automate_pipeline.py --total 3 --skip-stage2 
+
+# Uses local llama.cpp for dialogue profiling, but keeps Gemini for translation
+python3 automate_pipeline.py --total 3 --dialogue-llm local
+
+# Only stage 2
+python3 automate_pipeline.py --total 3 --skip-stage1 --review
+
 ```
 
 # TODO

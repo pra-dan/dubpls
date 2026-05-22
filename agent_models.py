@@ -1,5 +1,32 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Literal
+
+
+class VideoProfile(BaseModel):
+    """Whole-video metadata extracted by the VLM once, reused per segment."""
+    genre: str = Field(
+        description="Genre of the content, e.g. 'comedic action', 'historical drama', 'sci-fi thriller'"
+    )
+    genre_examples: str = Field(
+        description="Comma-separated genre tag examples for translator context, e.g. 'Comedy, Action, Buddy Cop'"
+    )
+    video_type: Literal["movie", "trailer", "speech", "tutorial", "documentary", "series", "short_film", "other"] = Field(
+        description="Classification of what kind of video this is"
+    )
+    maturity_rating: str = Field(
+        description="Content maturity level, e.g. 'R-rated', 'PG-13', 'G', 'NC-17'"
+    )
+    tone: str = Field(
+        description="Overall emotional/stylistic tone, e.g. 'sarcastic', 'serious', 'urgent', 'comedic', 'dark'"
+    )
+    formality_level: str = Field(
+        description="Language formality, e.g. 'informal', 'formal', 'neutral', 'street slang'"
+    )
+    setting_summary: Optional[str] = Field(
+        None,
+        description="1-sentence summary of the overall visual/narrative setting of the video"
+    )
+
 
 class AudioClassification(BaseModel):
     label: str
@@ -17,6 +44,8 @@ class Segment(BaseModel):
     audio_emotion_classification: Optional[Union[AudioClassification, str, dict]] = None
     
     video_context: Optional[str] = Field(None, description="Visual context description extracted by VLM")
+    # Whole-video profile shared across all segments (populated from PipelineData.video_profile)
+    video_profile: Optional["VideoProfile"] = Field(None, description="Global video genre/type profile from VLM")
     
     translation: Optional[str] = Field(None, description="The translated text")
     fr: Optional[str] = Field(None, description="Alternative key for French translation (legacy)")
@@ -24,3 +53,7 @@ class Segment(BaseModel):
 
 class PipelineData(BaseModel):
     segments: List[Segment]
+    video_profile: Optional[VideoProfile] = Field(
+        None,
+        description="Whole-video structural/genre profile extracted by VLM at the start of Stage 1"
+    )

@@ -158,23 +158,44 @@ def run_audio_classification(data: dict, audio_path: str, total: int) -> dict:
 # ---------------------------------------------------------------------------
 # Stage 1 — VLM context extraction (requires MiniCPM container)
 # ---------------------------------------------------------------------------
-def run_vlm_context(data: dict, video_path: str, total: int) -> dict:
-    """Extract visual context for each segment via VLM."""
+def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str = "local") -> dict:
+    """Extract whole-video profile + per-segment visual context via VLM."""
     print(f"\n{'='*60}")
     print("[Stage 1] VLM video context extraction")
     print(f"{'='*60}")
 
     import asyncio
     from agent_models import Segment
-    from vlm_agent import extract_visual_context
+    from vlm_agent import extract_visual_context, extract_video_profile, extract_dialogue_profile, merge_profiles
 
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
-    async def _process_all():
+    # --- 1a. Extract whole-video profile (called ONCE) ---------------------
+    # Build transcript snippets:
+    #   - short sample (first 5) passed to the VLM to give it dialogue context
+    #   - full transcript passed to the text-only dialogue profiler
+    sample_lines = [s.get("text", "") for s in segments[:5] if s.get("text")]
+    transcript_sample = "\n".join(sample_lines) if sample_lines else None
+    full_transcript = "\n".join(s.get("text", "") for s in segments if s.get("text"))
+
+    async def _extract_profile_and_contexts():
+        print("  [Stage 1a] Extracting VideoProfile from dialogue (text) ...")
+
+        # The user noted that the dialogue model (especially the cloud one) is much better,
+        # so we rely exclusively on the text dialogue for the overall video profile.
+        profile = await extract_dialogue_profile(full_transcript, llm_type=dialogue_llm)
+
+        # Store as a plain dict in data so it serialises cleanly to JSON
+        data["video_profile"] = profile.model_dump()
+        print(f"  [Stage 1a] VideoProfile: {data['video_profile']}")
+
+        # --- 1b. Per-segment visual context --------------------------------
         for i in range(total):
             seg_dict = segments[i]
-            
+            # Propagate the video_profile onto each segment dict so Stage 2 can use it
+            seg_dict["video_profile"] = data["video_profile"]
+
             seg = Segment(
                 text=seg_dict.get("text", ""),
                 start=seg_dict.get("start", 0.0),
@@ -184,11 +205,12 @@ def run_vlm_context(data: dict, video_path: str, total: int) -> dict:
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
                 audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
+                video_profile=profile,
                 translation=seg_dict.get("translation"),
                 fr=seg_dict.get("fr"),
                 fr_gt=seg_dict.get("fr_gt")
             )
-            
+
             try:
                 video_context = await extract_visual_context(seg)
                 seg_dict["video_context"] = video_context
@@ -199,7 +221,7 @@ def run_vlm_context(data: dict, video_path: str, total: int) -> dict:
             if (i + 1) % 5 == 0 or i + 1 == total:
                 print(f"  Processed {i+1}/{total} segments")
 
-    asyncio.run(_process_all())
+    asyncio.run(_extract_profile_and_contexts())
 
     print("[Stage 1] Done.")
     return data
@@ -215,11 +237,20 @@ def run_translation(data: dict, total: int) -> dict:
     print(f"{'='*60}")
 
     import asyncio
-    from agent_models import Segment
+    from agent_models import Segment, VideoProfile
     from translator_agent import translate_segment
 
     segments = data.get("segments", [])
     total = min(len(segments), total)
+
+    # Re-hydrate the VideoProfile from the stored dict (if present)
+    raw_profile = data.get("video_profile")
+    video_profile_obj = None
+    if raw_profile and isinstance(raw_profile, dict):
+        try:
+            video_profile_obj = VideoProfile(**raw_profile)
+        except Exception as e:
+            print(f"  [!] Could not parse VideoProfile from data: {e}")
 
     async def _process_all():
         for i in range(total):
@@ -233,6 +264,7 @@ def run_translation(data: dict, total: int) -> dict:
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
                 audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
+                video_profile=video_profile_obj,
                 translation=seg_dict.get("translation"),
                 fr=seg_dict.get("fr"),
                 fr_gt=seg_dict.get("fr_gt")
@@ -405,6 +437,12 @@ def main():
         help=f"Path to video file (default: {DEFAULT_VIDEO})",
     )
     parser.add_argument(
+        "--dialogue-llm",
+        choices=["cloud", "local"],
+        default="cloud",
+        help="Which LLM to use for extracting dialogue profile: 'cloud' (Gemini) or 'local' (llama.cpp) (default: cloud)",
+    )
+    parser.add_argument(
         "--total",
         type=int,
         default=5,
@@ -482,7 +520,7 @@ def main():
                 stop_container(VLM_COMPOSE)
                 sys.exit(1)
 
-            data = run_vlm_context(data, args.video_path, args.total)
+            data = run_vlm_context(data, args.video_path, args.total, dialogue_llm=args.dialogue_llm)
         finally:
             stop_container(VLM_COMPOSE)
 
@@ -510,7 +548,7 @@ def main():
             json.dump(data, f, indent=2, ensure_ascii=False)
         print(f"\n[✓] Final results saved to: {OUTPUT_JSON}")
 
-        # Run LLM-judge review 
+        # Run LLM-judge (Smart) review 
         if args.review:
             print(f"\n{'='*60}")
             print("[Review] Running LLM-as-judge evaluation ...")
@@ -518,10 +556,12 @@ def main():
             import asyncio
             from review_translation import review as run_review
             asyncio.run(run_review(OUTPUT_JSON, args.total, REVIEW_JSON))
+
+        # Unsmart review
+        evaluate(data, args.total)
     else:
         print("[Skip] Stage 2 skipped.")
 
-    evaluate(data, args.total)
 
     print(f"\n{'='*60}")
     print("  Pipeline complete!")
