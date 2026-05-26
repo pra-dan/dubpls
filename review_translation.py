@@ -23,6 +23,7 @@ from typing import Any
 import dotenv
 from agent_models import Segment
 from reviewer_agent import review_segment
+from utils import load_config, get_language_name
 
 # Load environment variables (e.g., ANTHROPIC_API_KEY)
 dotenv.load_dotenv()
@@ -60,11 +61,12 @@ def build_recommendations(segment_results: list[dict]) -> list[str]:
 # ---------------------------------------------------------------------------
 # Main evaluation
 # ---------------------------------------------------------------------------
-async def review(json_path: str, total: int, output_path: str) -> dict[str, Any]:
+async def review(json_path: str, total: int, output_path: str, target_language: str = "fr") -> dict[str, Any]:
     """Run LLM-as-judge evaluation and write review_feedback.json."""
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    language_name = get_language_name(target_language)
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
@@ -76,8 +78,8 @@ async def review(json_path: str, total: int, output_path: str) -> dict[str, Any]
 
     for i in range(total):
         seg = segments[i]
-        pred = (seg.get("translation") or seg.get("fr") or "").strip()
-        gt = (seg.get("fr_gt") or "").strip()
+        pred = (seg.get("translation") or seg.get(target_language) or "").strip()
+        gt = (seg.get(f"{target_language}_gt") or "").strip()
         english = (seg.get("text") or "").strip()
 
         if not gt:
@@ -99,7 +101,9 @@ async def review(json_path: str, total: int, output_path: str) -> dict[str, Any]
                 end=0.0,
                 speaker="unknown",
                 translation=pred,
-                fr_gt=gt
+                target_language=target_language,
+                language_name=language_name,
+                **{f"{target_language}_gt": gt}
             )
             try:
                 judge_result = await review_segment(seg_obj)
@@ -167,7 +171,10 @@ async def review(json_path: str, total: int, output_path: str) -> dict[str, Any]
 # ---------------------------------------------------------------------------
 def main():
     project_root = os.path.dirname(os.path.abspath(__file__))
-    default_json = os.path.join(project_root, "media", "en_fr_eval_output.json")
+    config = load_config(os.path.join(project_root, "config.yaml"))
+    target_language = config.get("target_language", "fr")
+    
+    default_json = os.path.join(project_root, "media", f"en_{target_language}_eval_output.json")
     default_output = os.path.join(project_root, "media", "review_feedback.json")
 
     parser = argparse.ArgumentParser(
@@ -195,7 +202,7 @@ def main():
         print(f"[E] JSON not found: {args.json_path}", file=sys.stderr)
         sys.exit(1)
 
-    asyncio.run(review(args.json_path, args.total, args.output))
+    asyncio.run(review(args.json_path, args.total, args.output, target_language))
 
 
 if __name__ == "__main__":

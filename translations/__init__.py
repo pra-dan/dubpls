@@ -1,19 +1,11 @@
 from .base import BaseTranslator
-from .english_hindi import EnglishToHindiTranslator
-from .english_french import EnglishToFrenchTranslator
-
+from .dynamic_translator import LLMDynamicTranslator
 
 def get_translator(language: str) -> BaseTranslator:
     """
-    Return a translator instance for the requested language code.
+    Return a dynamic translator instance for the requested language code.
     """
-    normalized = (language or "").lower()
-    registry = {
-        "hi": EnglishToHindiTranslator,
-        "fr": EnglishToFrenchTranslator,
-    }
-    translator_cls = registry.get(normalized, EnglishToHindiTranslator)
-    return translator_cls()
+    return LLMDynamicTranslator(target_language=(language or "hi"))
 
 
 def translate_segments(json_path: str, config: dict) -> None:

@@ -16,14 +16,6 @@ dotenv.load_dotenv()
 translator_agent = Agent(
     'google:gemini-3.1-flash-lite',
     output_type=str,
-    system_prompt=(
-        "You are an expert French dubbing translator. "
-        "Your task is to translate English dialogue into highly colloquial, informal French.\n\n"
-        "Rules:\n"
-        "1. Do NOT reply to the text or provide notes. Only output the translation.\n"
-        "2. Use slang, informal phrasing (argot), and NEVER use 'vous' (always use 'tu').\n"
-        "3. STRICT LENGTH CONSTRAINT: The output length must closely match the input.\n"
-    ),
 )
 
 
@@ -77,6 +69,14 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
         emotion = segment.audio_emotion_classification.label
 
     return f"""\
+You are an expert {segment.language_name} dubbing translator.
+Your task is to translate English dialogue into highly colloquial, informal {segment.language_name}.
+
+Rules:
+1. Do NOT reply to the text or provide notes. Only output the translation.
+2. Use slang, informal phrasing (argot).
+3. STRICT LENGTH CONSTRAINT: The output length must closely match the input.
+
 === VIDEO PROFILE ===
 Video Type    : {video_type}
 Genre         : {genre}

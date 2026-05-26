@@ -4,6 +4,25 @@ import json
 import os
 import tempfile
 import shutil
+import yaml
+
+def load_config(config_path="config.yaml"):
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            return config if config else {}
+    except Exception as e:
+        print(f"Failed to load config at {config_path}: {e}")
+        return {}
+
+def get_language_name(lang_code: str) -> str:
+    mapping = {
+        "fr": "French",
+        "hi": "Hindi",
+        "en": "English",
+        "es": "Spanish"
+    }
+    return mapping.get(lang_code.lower(), lang_code.capitalize())
 
 def isolate_media_streams(input_path):
     # Check file integrity

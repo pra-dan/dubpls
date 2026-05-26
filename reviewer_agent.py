@@ -9,29 +9,29 @@ class ReviewResult(BaseModel):
 
 # The reviewer agent uses Google's Gemini for fast evaluation.
 reviewer_agent = Agent(
-    'google:gemini-3.1-flash-lite',
+    'google:gemini-3.1-pro-preview',#'google:gemini-3.1-flash-lite',
     output_type=ReviewResult,
-    system_prompt=(
-        "You will be given an Input text (English), a translated text (French), and a ground-truth reference translation (French).\n"
-        "Your task is to provide a 'total rating' scoring how well the translated text translates the Input text.\n"
-        "Give your answer on a scale of 1 to 5, where 1 means that the translated text is not helpful at all, and 5 means that the translated text completely and helpfully translates the user input.\n\n"
-        "Rubric (each criterion is worth +1 point):\n"
-        "+1 if the number of words in the translated text is offset by less than 2 words (more or fewer) compared to the ground-truth reference translation.\n"
-        "+1 if the intent of the Input text is retained in the translated text.\n"
-        "+1 if the tone of formality (professional, casual, vulgar, etc) of the translated text matches the ground-truth reference translation.\n"
-        "+1 if people are referred to correctly — e.g. gender is not mixed up, correct choice between tu/toi vs vous, etc.\n"
-        "+1 if the colloquialism level of the translated text matches the ground-truth reference translation.\n"
-    )
 )
 
 @reviewer_agent.system_prompt
 def inject_evaluation_context(ctx: RunContext[Segment]) -> str:
     segment = ctx.deps
     english = segment.text
-    translated = segment.translation or segment.fr or ""
-    gt = segment.fr_gt or ""
+    translated = segment.translation or getattr(segment, segment.target_language, None) or ""
+    gt = getattr(segment, f"{segment.target_language}_gt", None) or ""
     
     return f"""
+You will be given an Input text (English), a translated text ({segment.language_name}), and a ground-truth reference translation ({segment.language_name}).
+Your task is to provide a 'total rating' scoring how well the translated text translates the Input text.
+Give your answer on a scale of 1 to 5, where 1 means that the translated text is not helpful at all, and 5 means that the translated text completely and helpfully translates the user input.
+
+Rubric (each criterion is worth +1 point):
++1 if the number of words in the translated text is offset by less than 2 words (more or fewer) compared to the ground-truth reference translation.
++1 if the intent of the Input text is retained in the translated text.
++1 if the tone of formality (professional, casual, vulgar, etc) of the translated text matches the ground-truth reference translation.
++1 if people are referred to correctly — e.g. gender is not mixed up, correct pronouns, etc.
++1 if the colloquialism level of the translated text matches the ground-truth reference translation.
+
 Input text: {english}
 translated text: {translated}
 gt_translation_text: {gt}

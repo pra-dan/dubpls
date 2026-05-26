@@ -224,7 +224,7 @@ python3 main.py
 
 # Only stage 1 (Separate A+V, get video+audio context) 
 # Uses Gemini for BOTH dialogue profiling and translation
-clear && python3 automate_pipeline.py --total 3 --skip-stage2 
+clear && python3 automate_pipeline.py --total 4 --skip-stage2 
 
 # Uses local llama.cpp for dialogue profiling, but keeps Gemini for translation
 python3 automate_pipeline.py --total 3 --dialogue-llm local
@@ -235,9 +235,9 @@ python3 automate_pipeline.py --total 3 --skip-stage1 --review
 ```
 
 # TODO
-- Improve LLM/prompting for better tone determination.
+[x] Improve LLM/prompting for better tone determination.
 - Add support for Hindi.
-- Reduce multiple environments to one or independent services.
+[x] Reduce multiple environments to one or independent services.
 
 # Additional fixes
 a. Explicitly add lib path to [stay away from dependency issues](https://github.com/m-bain/whisperX/issues/902#issuecomment-2646634513):

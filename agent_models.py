@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Union, Literal
+from pydantic import ConfigDict
 
 
 class VideoProfile(BaseModel):
@@ -48,8 +49,13 @@ class Segment(BaseModel):
     video_profile: Optional["VideoProfile"] = Field(None, description="Global video genre/type profile from VLM")
     
     translation: Optional[str] = Field(None, description="The translated text")
-    fr: Optional[str] = Field(None, description="Alternative key for French translation (legacy)")
-    fr_gt: Optional[str] = Field(None, description="Ground truth French translation for evaluation")
+    
+    # Target language dynamically passed in
+    target_language: str = Field("fr", description="Target language code (e.g. fr, hi)")
+    language_name: str = Field("French", description="Full name of target language (e.g. French)")
+
+    # Allow dynamic ground truth keys like fr_gt, hi_gt
+    model_config = ConfigDict(extra="allow")
 
 class PipelineData(BaseModel):
     segments: List[Segment]

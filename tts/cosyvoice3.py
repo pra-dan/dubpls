@@ -315,7 +315,7 @@ def tts(json_path: str, test_audio_path: str, target_lang='fr'):
         start_ms = int(segment.get("start") * 1000)
         final_dialogue_track = final_dialogue_track.overlay(seg_audio, position=start_ms)
 
-    final_dialogue_track.export(os.path.join("media", "final_french_dialogue.wav"), format="wav")
+    final_dialogue_track.export(os.path.join("media", f"final_{target_lang}_dialogue.wav"), format="wav")
 
 if __name__ == '__main__':
     jpath = "/home/prashant/Documents/dubpls/media/_deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"#"/home/prashant/Documents/dubpls/media/deadpool-2025-12-18_15.27.22_extracted_dialog_diarize_result.json"
@@ -323,4 +323,5 @@ if __name__ == '__main__':
     env = os.environ.copy()
     # jpath = env["SESSION_JSON_PATH"]
     # apath = env["TEST_DIALOGUE_AUDIO_PATH"]
-    tts(jpath, apath)
+    # Provide the correct target_lang based on your config when running standalone, defaulting to 'fr' here
+    tts(jpath, apath, target_lang='fr')
