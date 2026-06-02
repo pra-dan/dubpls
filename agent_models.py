@@ -23,10 +23,6 @@ class VideoProfile(BaseModel):
     formality_level: str = Field(
         description="Language formality, e.g. 'informal', 'formal', 'neutral', 'street slang'"
     )
-    setting_summary: Optional[str] = Field(
-        None,
-        description="1-sentence summary of the overall visual/narrative setting of the video"
-    )
 
 
 class AudioClassification(BaseModel):

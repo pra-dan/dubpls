@@ -76,6 +76,7 @@ async def review(json_path: str, total: int, output_path: str, target_language: 
     print(f"\n{'Seg':>4}  {'Score':>5}  {'Evaluation (first 80 chars)'}")
     print("-" * 100)
 
+    # import pdb; pdb.set_trace()
     for i in range(total):
         seg = segments[i]
         pred = (seg.get("translation") or seg.get(target_language) or "").strip()
@@ -109,6 +110,7 @@ async def review(json_path: str, total: int, output_path: str, target_language: 
                 judge_result = await review_segment(seg_obj)
                 rating = judge_result.rating
                 eval_text = judge_result.evaluation
+                print(judge_result)
             except Exception as e:
                 rating = 0
                 eval_text = f"Agent failed: {e}"

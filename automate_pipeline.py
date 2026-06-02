@@ -161,44 +161,43 @@ def run_audio_classification(data: dict, audio_path: str, total: int) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Stage 1 — VLM context extraction (requires MiniCPM container)
+# Stage 1 — VLM context extraction (cloud-based, no local container needed)
 # ---------------------------------------------------------------------------
-def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str = "local") -> dict:
-    """Extract whole-video profile + per-segment visual context via VLM."""
+def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str = "cloud") -> dict:
+    """Extract whole-video profile + per-segment visual context via cloud Gemini Flash."""
     print(f"\n{'='*60}")
-    print("[Stage 1] VLM video context extraction")
+    print("[Stage 1] Cloud VLM context extraction")
     print(f"{'='*60}")
 
     import asyncio
     from agent_models import Segment
-    from vlm_agent import extract_visual_context, extract_video_profile, extract_dialogue_profile, merge_profiles
+    from vlm_agent import (
+        extract_dialogue_profile,
+        extract_scene_summaries_cloud,
+        extract_segment_context_cloud,
+    )
 
     segments = data.get("segments", [])
     total = min(len(segments), total)
 
-    # --- 1a. Extract whole-video profile (called ONCE) ---------------------
-    # Build transcript snippets:
-    #   - short sample (first 5) passed to the VLM to give it dialogue context
-    #   - full transcript passed to the text-only dialogue profiler
-    sample_lines = [s.get("text", "") for s in segments[:5] if s.get("text")]
-    transcript_sample = "\n".join(sample_lines) if sample_lines else None
+    # Full transcript for dialogue-based video profiling
     full_transcript = "\n".join(s.get("text", "") for s in segments if s.get("text"))
 
     async def _extract_profile_and_contexts():
-        print("  [Stage 1a] Extracting VideoProfile from dialogue (text) ...")
-
-        # The user noted that the dialogue model (especially the cloud one) is much better,
-        # so we rely exclusively on the text dialogue for the overall video profile.
+        print("  [Stage 1a] Extracting VideoProfile from dialogue (cloud) ...")
         profile = await extract_dialogue_profile(full_transcript, llm_type=dialogue_llm)
-
-        # Store as a plain dict in data so it serialises cleanly to JSON
         data["video_profile"] = profile.model_dump()
         print(f"  [Stage 1a] VideoProfile: {data['video_profile']}")
 
-        # --- 1b. Per-segment visual context --------------------------------
+        # --- 1b. Scene summarization (once for the whole video) ---------------
+        print("  [Stage 1b] Extracting per-scene summaries via Gemini Flash (mosaic) ...")
+        scene_summaries = await extract_scene_summaries_cloud(video_path)
+        data["scene_summaries"] = scene_summaries
+        print(f"  [Stage 1b] Got {len(scene_summaries)} scene summaries")
+
+        # --- 1c. Per-segment dialogue context (cloud) -------------------------
         for i in range(total):
             seg_dict = segments[i]
-            # Propagate the video_profile onto each segment dict so Stage 2 can use it
             seg_dict["video_profile"] = data["video_profile"]
 
             seg = Segment(
@@ -222,10 +221,10 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
             )
 
             try:
-                video_context = await extract_visual_context(seg)
+                video_context = await extract_segment_context_cloud(seg, scene_summaries)
                 seg_dict["video_context"] = video_context
             except Exception as e:
-                print(f"  [!] VLM error on segment {i}: {e}")
+                print(f"  [!] Context error on segment {i}: {e}")
                 seg_dict["video_context"] = ""
 
             if (i + 1) % 5 == 0 or i + 1 == total:
@@ -527,17 +526,8 @@ def main():
         # Stage 0 — Audio classification (local, no Docker)
         data = run_audio_classification(data, args.audio_path, args.total)
 
-        # Stage 1 — VLM context (needs MiniCPM container)
-        try:
-            start_container(VLM_COMPOSE)
-            if not wait_for_health(args.health_timeout):
-                print("[E] VLM container failed to become healthy. Aborting.")
-                stop_container(VLM_COMPOSE)
-                sys.exit(1)
-
-            data = run_vlm_context(data, args.video_path, args.total, dialogue_llm=args.dialogue_llm)
-        finally:
-            stop_container(VLM_COMPOSE)
+        # Stage 1 — Cloud VLM context (no Docker container needed)
+        data = run_vlm_context(data, args.video_path, args.total, dialogue_llm=args.dialogue_llm)
 
         # Save intermediate results
         with open(STAGE1_JSON, "w", encoding="utf-8") as f:
@@ -570,7 +560,7 @@ def main():
             print(f"{'='*60}")
             import asyncio
             from review_translation import review as run_review
-            asyncio.run(run_review(OUTPUT_JSON, args.total, REVIEW_JSON))
+            asyncio.run(run_review(OUTPUT_JSON, args.total, REVIEW_JSON, TARGET_LANGUAGE))
 
         # Unsmart review
         # evaluate(data, args.total)

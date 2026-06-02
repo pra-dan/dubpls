@@ -84,8 +84,7 @@ markdown fences — with exactly these keys:
   "video_type": "<one of: movie, trailer, speech, tutorial, documentary, series, short_film, other>",
   "maturity_rating": "<e.g. R-rated, PG-13, PG, G, NC-17>",
   "tone": "<e.g. sarcastic, serious, urgent, comedic, dark, lighthearted>",
-  "formality_level": "<one of: informal, formal, neutral, street slang>",
-  "setting_summary": "<1 sentence describing the overall visual setting / narrative context>"
+  "formality_level": "<one of: informal, formal, neutral, street slang>"
 }
 
 Be concise and precise. Do not guess if unsure — use 'other' or 'neutral' as safe \
@@ -118,7 +117,6 @@ def _parse_video_profile_json(raw: str) -> VideoProfile:
             maturity_rating="unknown",
             tone="neutral",
             formality_level="neutral",
-            setting_summary=None,
         )
 
     # Sanitize video_type to the allowed Literal values
@@ -133,7 +131,6 @@ def _parse_video_profile_json(raw: str) -> VideoProfile:
         maturity_rating=data.get("maturity_rating", "unknown"),
         tone=data.get("tone", "neutral"),
         formality_level=data.get("formality_level", "neutral"),
-        setting_summary=data.get("setting_summary"),
     )
 
 
@@ -207,7 +204,6 @@ async def extract_video_profile(video_path: str, transcript_sample: Optional[str
             maturity_rating="unknown",
             tone="neutral",
             formality_level="neutral",
-            setting_summary=None,
         )
 
 
@@ -313,8 +309,7 @@ no prose, no markdown fences — with exactly these keys:
   "video_type": "<one of: movie, trailer, speech, tutorial, documentary, series, short_film, other>",
   "maturity_rating": "<e.g. R-rated, PG-13, PG, G, NC-17, Adult>",
   "tone": "<e.g. sarcastic, serious, urgent, comedic, dark, lighthearted>",
-  "formality_level": "<one of: informal, formal, neutral, street slang>",
-  "setting_summary": "<1 sentence describing the narrative setting inferred from dialogue>"
+  "formality_level": "<one of: informal, formal, neutral, street slang>"
 }
 
 Guidelines:
@@ -330,7 +325,7 @@ Transcript:
 
 async def extract_dialogue_profile(transcript: str, llm_type: str = "local") -> VideoProfile:
     """
-    Calls either the local text-only endpoint or Gemini with the full transcript to derive a
+    Calls either the local text-only endpoint or Gemini with the full transcript (all segments) to derive a
     VideoProfile purely from dialogue content.
 
     This is intentionally text-only (no images) so it can be run in parallel
@@ -346,7 +341,6 @@ async def extract_dialogue_profile(transcript: str, llm_type: str = "local") -> 
         maturity_rating="unknown",
         tone="neutral",
         formality_level="neutral",
-        setting_summary=None,
     )
 
     if not transcript or not transcript.strip():
@@ -409,55 +403,239 @@ async def extract_dialogue_profile(transcript: str, llm_type: str = "local") -> 
 
 
 # ---------------------------------------------------------------------------
-# Per-segment visual context extraction (unchanged from original)
+# Cloud-based scene summarization (Gemini Flash)
 # ---------------------------------------------------------------------------
 
-async def extract_visual_context(segment: Segment) -> str:
+def create_scene_mosaic(
+    video_path: str,
+    start_time: float,
+    end_time: float,
+    grid_cols: int = 6,
+    grid_rows: int = 6,
+    tile_width: int = 320,
+    tile_height: int = 180,
+) -> Optional[bytes]:
     """
-    Extracts visual context for a specific segment using a local VLM.
-    We use standard async/requests here because local llama.cpp multimodal
-    payloads can sometimes be finicky with standard library abstractions.
+    Samples `grid_cols * grid_rows` equidistant frames from [start_time, end_time]
+    in the video and arranges them in a grid mosaic.
+
+    Returns the raw JPEG bytes of the mosaic, or None on failure.
     """
-    video_path = segment.collected_scenes_path
-    if not video_path:
-        return "No visual context available."
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"[vlm_agent] create_scene_mosaic: cannot open {video_path}")
+        return None
 
-    frames = get_video_frames(video_path, max_frames=8)
-    if not frames:
-        return "No visual context available."
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    start_f = max(0, int(start_time * fps))
+    end_f   = min(total_frames - 1, int(end_time * fps))
 
-    ttext = "You are a visual context analyzer for movie scenes. "
-    if segment.text:
-        ttext += f"The current dialogue line is: '{segment.text}'. "
-    ttext += (
-        "Based on the visual frames, provide a 1-sentence summary of the visual setting "
-        "and the emotion/relationship of the characters. "
-        "Do NOT hallucinate subtitles, do NOT output Chinese, and keep it very brief."
+    n_tiles = grid_cols * grid_rows
+    if end_f <= start_f:
+        cap.release()
+        return None
+
+    positions = [
+        start_f + int(i * (end_f - start_f) / (n_tiles - 1))
+        for i in range(n_tiles)
+    ] if n_tiles > 1 else [start_f]
+
+    tiles = []
+    for pos in positions:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
+        ret, frame = cap.read()
+        if ret:
+            tile = cv2.resize(frame, (tile_width, tile_height))
+        else:
+            tile = cv2.zeros((tile_height, tile_width, 3), dtype="uint8")
+        tiles.append(tile)
+
+    cap.release()
+
+    # Build grid row by row
+    rows = []
+    for r in range(grid_rows):
+        row_tiles = tiles[r * grid_cols : (r + 1) * grid_cols]
+        rows.append(cv2.hconcat(row_tiles))
+    mosaic = cv2.vconcat(rows)
+
+    _, buf = cv2.imencode(".jpg", mosaic, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+    return bytes(buf)
+
+
+async def extract_scene_summaries_cloud(
+    video_path: str,
+    threshold: float = 27.0,
+    grid_cols: int = 6,
+    grid_rows: int = 6,
+) -> List[dict]:
+    """
+    Detects scenes using PySceneDetect, builds a mosaic for each scene,
+    and asks Gemini Flash for a concise 1-2 sentence summary of each scene.
+
+    Returns a list of dicts:
+        [
+          {
+            "scene_idx": 0,
+            "start": 0.0,    # seconds
+            "end": 12.5,
+            "summary": "Two men argue near a bar counter at night..."
+          },
+          ...
+        ]
+    """
+    import dotenv
+    dotenv.load_dotenv()
+    from pydantic_ai import Agent, BinaryContent
+    from pydantic_ai.models.gemini import GeminiModelSettings
+    try:
+        from scenedetect import open_video, SceneManager
+        from scenedetect.detectors import ContentDetector
+    except ImportError:
+        print("[vlm_agent] scenedetect not installed — cannot extract scene summaries.")
+        exit(1)
+        return []
+
+    print(f"[vlm_agent] Detecting scenes in: {video_path}")
+    vid = open_video(video_path)
+    fps = vid.frame_rate or 25.0
+    sm = SceneManager()
+    sm.add_detector(ContentDetector(threshold=threshold, min_scene_len=int(fps * 2)))
+    sm.detect_scenes(vid, show_progress=False)
+    scene_list = sm.get_scene_list()
+    print(f"[vlm_agent] Found {len(scene_list)} scenes")
+
+    if not scene_list:
+        return []
+
+    scene_agent = Agent(
+        "google:gemini-3.1-flash-lite",
+        output_type=str,
+        system_prompt=(
+            "You are a scene analyst for film dubbing. You are given a mosaic of frames "
+            "sampled equidistantly from a single scene/shot of a video.\n"
+            "Write a descriptive paragraph (3-5 sentences) covering:\n"
+            "  - The setting (location, time of day, atmosphere)\n"
+            "  - Characters present (appearance, body language, position)\n"
+            "  - What is happening (actions, interactions, key events)\n"
+            "  - The emotional tone or tension of the scene\n"
+            "  - Any narrative significance if evident from the visuals\n"
+            "Be factual and specific. Avoid vague openers like 'The scene shows...'. "
+            "Do NOT describe the mosaic grid layout itself. "
+            "Do NOT add headings or bullet points — write continuous prose."
+        ),
     )
 
-    content = [{"type": "text", "text": ttext}]
-    for b64_img in frames:
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"},
-        })
+    results = []
+    prev_summary: str = ""
+    for scene_idx, (start_tc, end_tc) in enumerate(scene_list):
+        start_s = float(start_tc.get_seconds())
+        end_s   = float(end_tc.get_seconds())
 
-    payload = {
-        "messages": [{"role": "user", "content": content}],
-        "temperature": 0.1,
-        "max_tokens": 1024,
-    }
+        mosaic_bytes = create_scene_mosaic(
+            video_path, start_s, end_s,
+            grid_cols=grid_cols, grid_rows=grid_rows,
+        )
+        if mosaic_bytes is None:
+            print(f"[vlm_agent] Scene {scene_idx}: mosaic failed, skipping.")
+            results.append({"scene_idx": scene_idx, "start": start_s, "end": end_s, "summary": ""})
+            continue
 
-    loop = asyncio.get_event_loop()
+        try:
+            # Build a prompt that includes the previous scene's context for narrative continuity
+            user_text = f"Scene duration: {end_s - start_s:.1f}s.\n"
+            if prev_summary:
+                user_text += (
+                    f"Previous scene context (for narrative continuity):\n{prev_summary}\n\n"
+                    "Now describe the CURRENT scene shown in the mosaic below:"
+                )
+            else:
+                user_text += "Describe this scene."
 
-    def make_request():
-        resp = requests.post(API_URL, json=payload, timeout=120)
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+            result = await scene_agent.run(
+                [
+                    BinaryContent(data=mosaic_bytes, media_type="image/jpeg"),
+                    user_text,
+                ]
+            )
+            summary = result.data if hasattr(result, "data") else result.output
+            if not isinstance(summary, str):
+                summary = str(summary)
+            summary = summary.strip()
+            prev_summary = summary  # carry forward for next scene
+        except Exception as exc:
+            print(f"[vlm_agent] Scene {scene_idx} Gemini call failed: {exc}")
+            summary = ""
+            # Don't update prev_summary on failure so we don't propagate empty context
+
+        print(f"[vlm_agent] Scene {scene_idx} [{start_s:.1f}s-{end_s:.1f}s]: {summary[:100]}")
+        results.append({"scene_idx": scene_idx, "start": start_s, "end": end_s, "summary": summary})
+
+    return results
+
+
+def _find_scene_for_segment(scene_summaries: List[dict], seg_start: float, seg_end: float) -> Optional[dict]:
+    """Returns the scene dict that best overlaps with the segment's time range."""
+    if not scene_summaries:
+        return None
+    # Use the segment midpoint as the primary lookup key
+    mid = (seg_start + seg_end) / 2.0
+    best = None
+    best_overlap = -1.0
+    for sc in scene_summaries:
+        overlap_start = max(sc["start"], seg_start)
+        overlap_end   = min(sc["end"],   seg_end)
+        overlap = max(0.0, overlap_end - overlap_start)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best = sc
+        # If mid falls cleanly inside, that's always best
+        if sc["start"] <= mid < sc["end"]:
+            return sc
+    return best
+
+
+async def extract_segment_context_cloud(
+    segment: "Segment",
+    scene_summaries: List[dict],
+) -> str:
+    """
+    Given a segment and the pre-computed scene summaries, asks Gemini to produce
+    a 1-sentence visual context for this dialogue grounded in the parent scene.
+
+    This replaces the local `extract_visual_context()` call.
+    """
+    import dotenv
+    dotenv.load_dotenv()
+    from pydantic_ai import Agent
+
+    parent_scene = _find_scene_for_segment(scene_summaries, segment.start, segment.end)
+    scene_info = parent_scene["summary"] if parent_scene and parent_scene.get("summary") else "No scene summary available."
+
+    context_agent = Agent(
+        "google:gemini-3.1-flash-lite",
+        output_type=str,
+        system_prompt=(
+            "You are a dubbing context annotator. Your job is to write a single concise sentence "
+            "describing the visual context for a specific dialogue line, grounded in the scene description provided. "
+            "This context will be used to help a translator choose the most appropriate wording. "
+            "Be specific about characters, mood, and setting. Do NOT just repeat the scene description."
+        ),
+    )
+
+    prompt = (
+        f"Scene description: {scene_info}\n\n"
+        f"Dialogue line: \"{segment.text.strip()}\"\n\n"
+        "In one sentence, describe the specific visual context for this dialogue line."
+    )
 
     try:
-        context = await loop.run_in_executor(None, make_request)
-        return context
-    except Exception as e:
-        print(f"Error extracting visual context for segment {segment.start}-{segment.end}: {e}")
-        return "Visual context extraction failed."
+        result = await context_agent.run(prompt)
+        context = result.data if hasattr(result, "data") else result.output
+        if not isinstance(context, str):
+            context = str(context)
+        return context.strip()
+    except Exception as exc:
+        print(f"[vlm_agent] extract_segment_context_cloud failed for segment [{segment.start:.1f}s]: {exc}")
+        return scene_info  # Fallback: just use the scene summary

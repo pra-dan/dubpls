@@ -9,7 +9,8 @@ class ReviewResult(BaseModel):
 
 # The reviewer agent uses Google's Gemini for fast evaluation.
 reviewer_agent = Agent(
-    'google:gemini-3.1-pro-preview',#'google:gemini-3.1-flash-lite',
+    'google:gemini-3.1-pro-preview',
+    # 'google:gemini-3.1-flash-lite',
     output_type=ReviewResult,
 )
 

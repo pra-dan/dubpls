@@ -16,15 +16,39 @@ class EnglishToHindiTranslator(BaseTranslator):
     # def __init__(self, url):
     #     self.url = url
 
-    def translate_text(self, text: str) -> str:
+    def translate_text(self, segment) -> str:
         headers = {"Content-Type": "application/json"}
+        
+        # Handle case where segment might be a string (from warmup) or a dict (from pipeline)
+        if isinstance(segment, dict):
+            speech_text = segment.get("text", "")
+            vp = segment.get("video_profile") or {}
+            if hasattr(vp, "model_dump"):
+                vp = vp.model_dump()
+            
+            setting_summary = vp.get("setting_summary", "Not available")
+            formality_level = vp.get("formality_level", "informal")
+            overall_tone = vp.get("tone", "neutral")
+            
+            system_prompt = (
+                f"You are an expert Hindi dubbing translator. "
+                f"Translate the English text into Hindi that matches the exact scene tone. "
+                f"Setting: {setting_summary}. Formality: {formality_level}. Tone: {overall_tone}. "
+                f"Dynamically adjust the colloquialism, regional dialect, and slang to fit perfectly. "
+                f"Do not sanitize vulgarity if the context is aggressive. "
+                f"Strictly maintain the original length."
+            )
+        else:
+            speech_text = segment
+            system_prompt = "Translate the text below to Hindi."
+
         data = {
             "messages": [
                 {
                     "role": "system",
-                    "content": f"Translate the text below to Hindi.: {text}",
+                    "content": system_prompt,
                 },
-                {"role": "user", "content": f"{text}"},
+                {"role": "user", "content": f"{speech_text}"},
             ]
         }
 
