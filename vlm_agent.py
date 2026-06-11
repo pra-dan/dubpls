@@ -639,3 +639,154 @@ async def extract_segment_context_cloud(
     except Exception as exc:
         print(f"[vlm_agent] extract_segment_context_cloud failed for segment [{segment.start:.1f}s]: {exc}")
         return scene_info  # Fallback: just use the scene summary
+
+
+# ---------------------------------------------------------------------------
+# Character style extraction (cloud)
+# ---------------------------------------------------------------------------
+
+async def extract_character_style(
+    segment: "Segment",
+    scene_summaries: List[dict],
+    full_transcript: str,
+    video_profile: dict,
+) -> str:
+    """
+    Analyzes the dialogue line in context to determine the speaking character's
+    verbal personality: tone, attitude, vulgarity level, relationship dynamics,
+    and speaking mannerisms. This is used by the translator to match the character's
+    voice in the target language.
+
+    Returns a concise character style description string.
+    """
+    import dotenv
+    dotenv.load_dotenv()
+    from pydantic_ai import Agent
+
+    parent_scene = _find_scene_for_segment(scene_summaries, segment.start, segment.end)
+    scene_info = parent_scene["summary"] if parent_scene and parent_scene.get("summary") else "No scene context."
+
+    # Extract gender/emotion for richer character profiling
+    gender = ""
+    if isinstance(segment.audio_gender_classification, dict):
+        gender = segment.audio_gender_classification.get("label", "")
+    elif isinstance(segment.audio_gender_classification, str):
+        gender = segment.audio_gender_classification
+
+    emotion = ""
+    if isinstance(segment.audio_emotion_classification, dict):
+        emotion = segment.audio_emotion_classification.get("label", "")
+    elif isinstance(segment.audio_emotion_classification, str):
+        emotion = segment.audio_emotion_classification
+
+    style_agent = Agent(
+        "google:gemini-3.1-flash-lite",
+        output_type=str,
+        system_prompt=(
+            "You are a character voice analyst for film dubbing. "
+            "Given a dialogue line, its surrounding transcript, scene description, "
+            "speaker metadata, and the video's overall profile, you must describe "
+            "the speaking character's verbal style in 2-3 sentences.\n\n"
+            "Cover ALL of these aspects:\n"
+            "1. Personality/attitude (e.g. sarcastic, aggressive, timid, playful)\n"
+            "2. Vulgarity level (e.g. clean, mildly crude, heavily vulgar/profane)\n"
+            "3. Formality of address (e.g. uses 'you' casually, speaks down to others, deferential)\n"
+            "4. Speaking register (e.g. street slang, educated professional, military, childlike)\n"
+            "5. Relationship to the listener (e.g. confrontational, flirtatious, authoritative)\n\n"
+            "Be VERY specific. Do NOT be vague or generic. "
+            "Output ONLY the character style description, no headings or bullets."
+        ),
+    )
+
+    prompt = (
+        f"=== VIDEO PROFILE ===\n"
+        f"Genre: {video_profile.get('genre', 'unknown')}\n"
+        f"Video Type: {video_profile.get('video_type', 'unknown')}\n"
+        f"Maturity: {video_profile.get('maturity_rating', 'unknown')}\n"
+        f"Overall Tone: {video_profile.get('tone', 'neutral')}\n\n"
+        f"=== SCENE ===\n{scene_info}\n\n"
+        f"=== SPEAKER ===\nGender: {gender}, Current Emotion: {emotion}\n\n"
+        f"=== SURROUNDING TRANSCRIPT (for context) ===\n{full_transcript[:1500]}\n\n"
+        f"=== DIALOGUE LINE TO ANALYZE ===\n\"{segment.text.strip()}\"\n\n"
+        f"Describe this character's verbal style for a dubbing translator."
+    )
+
+    try:
+        result = await style_agent.run(prompt)
+        style = result.data if hasattr(result, "data") else result.output
+        if not isinstance(style, str):
+            style = str(style)
+        return style.strip()
+    except Exception as exc:
+        print(f"[vlm_agent] extract_character_style failed for segment [{segment.start:.1f}s]: {exc}")
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Dubbing register extraction (cloud)
+# ---------------------------------------------------------------------------
+
+async def extract_dubbing_register(
+    video_profile: dict,
+    character_style: str,
+    target_language: str,
+    language_name: str,
+) -> str:
+    """
+    Given the video profile, character style, and target language, determines the
+    specific dialect/register/slang level that the translator should use.
+
+    For example:
+    - R-rated superhero comedy + aggressive crude character + Hindi → "Mumbaiyya tapori Hindi with heavy street slang"
+    - Period drama + aristocratic character + French → "Formal classical French with vous forms"
+    - Kids animation + friendly character + Spanish → "Clean, simple Latin American Spanish"
+
+    Returns a concise dubbing register description string.
+    """
+    import dotenv
+    dotenv.load_dotenv()
+    from pydantic_ai import Agent
+
+    register_agent = Agent(
+        "google:gemini-3.1-flash-lite",
+        output_type=str,
+        system_prompt=(
+            f"You are a dubbing localization expert specializing in {language_name}.\n"
+            f"Given a video's genre/tone/maturity and a character's speaking style, "
+            f"you must determine the EXACT {language_name} dialect, register, and slang level "
+            f"that a dubbing translator should use.\n\n"
+            f"Your output must be a concise 2-3 sentence directive that a translator can follow. "
+            f"Include:\n"
+            f"1. The specific regional dialect or register (e.g. 'Mumbaiyya tapori Hindi', "
+            f"'Parisian argot French', 'Mexican street Spanish')\n"
+            f"2. Pronoun/address conventions (e.g. 'use तू/तेरा, never आप', 'use tú, never usted')\n"
+            f"3. How to handle profanity (e.g. 'transliterate English swears directly', "
+            f"'use local equivalents', 'keep it clean')\n"
+            f"4. Specific sentence patterns or endings typical of this register\n\n"
+            f"Be EXTREMELY specific to {language_name}. A translator reading your output "
+            f"should know EXACTLY what dialect and style to write in.\n"
+            f"Output ONLY the directive, no headings or explanations."
+        ),
+    )
+
+    prompt = (
+        f"=== VIDEO PROFILE ===\n"
+        f"Genre: {video_profile.get('genre', 'unknown')}\n"
+        f"Video Type: {video_profile.get('video_type', 'unknown')}\n"
+        f"Maturity: {video_profile.get('maturity_rating', 'unknown')}\n"
+        f"Overall Tone: {video_profile.get('tone', 'neutral')}\n"
+        f"Formality: {video_profile.get('formality_level', 'informal')}\n\n"
+        f"=== CHARACTER STYLE ===\n{character_style}\n\n"
+        f"What {language_name} dialect/register should the dubbing translator use for this character?"
+    )
+
+    try:
+        result = await register_agent.run(prompt)
+        register = result.data if hasattr(result, "data") else result.output
+        if not isinstance(register, str):
+            register = str(register)
+        return register.strip()
+    except Exception as exc:
+        print(f"[vlm_agent] extract_dubbing_register failed: {exc}")
+        return ""
+

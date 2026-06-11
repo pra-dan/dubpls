@@ -44,6 +44,10 @@ class Segment(BaseModel):
     # Whole-video profile shared across all segments (populated from PipelineData.video_profile)
     video_profile: Optional["VideoProfile"] = Field(None, description="Global video genre/type profile from VLM")
     
+    # Per-segment character & dubbing style (dynamically extracted by VLM context pipeline)
+    character_style: Optional[str] = Field(None, description="Description of the speaking character's tone, personality, and verbal mannerisms")
+    dubbing_register: Optional[str] = Field(None, description="Target-language register/dialect guidance for this segment (e.g. 'Mumbaiyya tapori Hindi' or 'formal Parisian French')")
+    
     translation: Optional[str] = Field(None, description="The translated text")
     
     # Target language dynamically passed in

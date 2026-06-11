@@ -175,6 +175,8 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
         extract_dialogue_profile,
         extract_scene_summaries_cloud,
         extract_segment_context_cloud,
+        extract_character_style,
+        extract_dubbing_register,
     )
 
     segments = data.get("segments", [])
@@ -182,6 +184,14 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
 
     # Full transcript for dialogue-based video profiling
     full_transcript = "\n".join(s.get("text", "") for s in segments if s.get("text"))
+
+    # Fields explicitly handled by Segment constructor — avoid double-passing via **kwargs
+    _SEGMENT_EXPLICIT_FIELDS = {
+        "text", "start", "end", "speaker", "collected_scenes_path",
+        "audio_gender_classification", "audio_emotion_classification",
+        "video_context", "video_profile", "translation",
+        "character_style", "dubbing_register",
+    }
 
     async def _extract_profile_and_contexts():
         print("  [Stage 1a] Extracting VideoProfile from dialogue (cloud) ...")
@@ -213,11 +223,7 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 translation=seg_dict.get("translation"),
                 target_language=TARGET_LANGUAGE,
                 language_name=LANGUAGE_NAME,
-                **{k: v for k, v in seg_dict.items() if k not in [
-                    "text", "start", "end", "speaker", "collected_scenes_path",
-                    "audio_gender_classification", "audio_emotion_classification",
-                    "video_context", "video_profile", "translation"
-                ]}
+                **{k: v for k, v in seg_dict.items() if k not in _SEGMENT_EXPLICIT_FIELDS}
             )
 
             try:
@@ -228,7 +234,53 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 seg_dict["video_context"] = ""
 
             if (i + 1) % 5 == 0 or i + 1 == total:
-                print(f"  Processed {i+1}/{total} segments")
+                print(f"  Processed {i+1}/{total} segments (context)")
+
+        # --- 1d. Character style + dubbing register (cloud) -------------------
+        print("  [Stage 1d] Extracting character style + dubbing register ...")
+        vp_dict = data["video_profile"]
+        for i in range(total):
+            seg_dict = segments[i]
+
+            seg = Segment(
+                text=seg_dict.get("text", ""),
+                start=seg_dict.get("start", 0.0),
+                end=seg_dict.get("end", 0.0),
+                speaker=seg_dict.get("speaker", "unknown"),
+                audio_gender_classification=seg_dict.get("audio_gender_classification"),
+                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
+                video_context=seg_dict.get("video_context"),
+                video_profile=profile,
+                target_language=TARGET_LANGUAGE,
+                language_name=LANGUAGE_NAME,
+                **{k: v for k, v in seg_dict.items() if k not in _SEGMENT_EXPLICIT_FIELDS}
+            )
+
+            try:
+                char_style = await extract_character_style(
+                    seg, scene_summaries, full_transcript, vp_dict
+                )
+                seg_dict["character_style"] = char_style
+                print(f"    Seg {i} character_style: {char_style[:100]}...")
+            except Exception as e:
+                print(f"  [!] Character style error on segment {i}: {e}")
+                seg_dict["character_style"] = ""
+
+            try:
+                dub_register = await extract_dubbing_register(
+                    vp_dict,
+                    seg_dict.get("character_style", ""),
+                    TARGET_LANGUAGE,
+                    LANGUAGE_NAME,
+                )
+                seg_dict["dubbing_register"] = dub_register
+                print(f"    Seg {i} dubbing_register: {dub_register[:100]}...")
+            except Exception as e:
+                print(f"  [!] Dubbing register error on segment {i}: {e}")
+                seg_dict["dubbing_register"] = ""
+
+            if (i + 1) % 5 == 0 or i + 1 == total:
+                print(f"  Processed {i+1}/{total} segments (style)")
 
     asyncio.run(_extract_profile_and_contexts())
 
@@ -262,6 +314,14 @@ def run_translation(data: dict, total: int) -> dict:
             print(f"  [!] Could not parse VideoProfile from data: {e}")
 
     async def _process_all():
+        # Fields explicitly handled by Segment constructor
+        _SEGMENT_EXPLICIT_FIELDS = {
+            "text", "start", "end", "speaker", "collected_scenes_path",
+            "audio_gender_classification", "audio_emotion_classification",
+            "video_context", "video_profile", "translation",
+            "character_style", "dubbing_register",
+        }
+
         for i in range(total):
             seg_dict = segments[i]
             seg = Segment(
@@ -274,14 +334,12 @@ def run_translation(data: dict, total: int) -> dict:
                 audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
                 video_profile=video_profile_obj,
+                character_style=seg_dict.get("character_style"),
+                dubbing_register=seg_dict.get("dubbing_register"),
                 translation=seg_dict.get("translation"),
                 target_language=TARGET_LANGUAGE,
                 language_name=LANGUAGE_NAME,
-                **{k: v for k, v in seg_dict.items() if k not in [
-                    "text", "start", "end", "speaker", "collected_scenes_path",
-                    "audio_gender_classification", "audio_emotion_classification",
-                    "video_context", "video_profile", "translation"
-                ]}
+                **{k: v for k, v in seg_dict.items() if k not in _SEGMENT_EXPLICIT_FIELDS}
             )
             try:
                 translation = await translate_segment(seg)

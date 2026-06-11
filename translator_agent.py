@@ -14,7 +14,7 @@ dotenv.load_dotenv()
 # is injected per-segment via the @system_prompt decorator below.
 # ---------------------------------------------------------------------------
 translator_agent = Agent(
-    'google:gemini-3.1-flash-lite',
+    'google:gemini-2.5-flash',
     output_type=str,
 )
 
@@ -68,14 +68,34 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
     elif getattr(segment.audio_emotion_classification, 'label', None):
         emotion = segment.audio_emotion_classification.label
 
+    # ── Character / dubbing style (dynamically extracted per-segment) ───────
+    char_style = segment.character_style or ""
+    dubbing_register = segment.dubbing_register or ""
+
+    # Count source words for the prompt
+    src_word_count = len(segment.text.strip().split())
+
     return f"""\
 You are an expert {segment.language_name} dubbing translator.
-Your task is to translate English dialogue into highly colloquial, informal {segment.language_name}.
+Your task is to translate English dialogue into {segment.language_name} that perfectly matches \
+the character's speaking style and the dubbing register described below.
 
-Rules:
-1. Do NOT reply to the text or provide notes. Only output the translation.
-2. Use slang, informal phrasing (argot).
-3. STRICT LENGTH CONSTRAINT: The output length must closely match the input.
+CRITICAL RULES:
+1. Output ONLY the translated line. No notes, quotes, explanations, no Devanagari transliteration.
+2. **STRICT LENGTH CONSTRAINT**: The source text has {src_word_count} words. \
+Your translation MUST have between {max(1, src_word_count - 2)} and {src_word_count + 2} words. \
+This is the HIGHEST priority rule — violating word count is worse than slightly imperfect tone.
+3. **GREETINGS & SHORT LINES**: If the source text is a greeting (e.g., "Hi"), translate it as a literal casual greeting (e.g., "हाय", "क्या हाल"), NOT as "हाँ" or an action. Keep the exact intent.
+4. **SLANG & TONE**: The CHARACTER STYLE and DUBBING REGISTER describe the character's OVERALL personality. \
+— Match the slang level to the line: use heavy slang for aggressive/profane lines. \
+— NEVER use formal or bookish vocabulary (like 'स्वागत योग्य' or 'स्वागत') for a street/casual character. \
+— For street/casual characters, heavily prefer idioms and regional slang (e.g., Bambaiya Hindi) over literal standard translations, but keep the core meaning intact.
+5. Do NOT sanitize profanity or vulgarity — if the source is crude, the translation must be equally crude.
+6. Prefer spoken/oral {segment.language_name} over written/literary {segment.language_name}.
+7. Greetings should match the character's casualness (e.g. don't use formal greetings for a crude character).
+8. Pronouns and address forms must match the character's relationship dynamics \
+(e.g. use informal "you" forms for aggressive/casual speakers).
+9. Output MUST be in {segment.language_name} script (e.g. Devanagari for Hindi). Never output in Roman/Latin script.
 
 === VIDEO PROFILE ===
 Video Type    : {video_type}
@@ -85,6 +105,12 @@ Maturity      : {maturity_rating}
 Overall Tone  : {overall_tone}
 Formality     : {formality_level}
 Setting       : {setting_summary}
+
+=== CHARACTER STYLE ===
+{char_style if char_style else "No character style info available — use the video profile tone/formality as guidance."}
+
+=== DUBBING REGISTER ===
+{dubbing_register if dubbing_register else "No dubbing register info available — match the video profile formality level."}
 
 === SCENE CONTEXT ===
 Visual Context: {video_context}
