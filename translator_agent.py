@@ -82,9 +82,7 @@ the character's speaking style and the dubbing register described below.
 
 CRITICAL RULES:
 1. Output ONLY the translated line. No notes, quotes, explanations, no Devanagari transliteration.
-2. **STRICT LENGTH CONSTRAINT**: The source text has {src_word_count} words. \
-Your translation MUST have between {max(1, src_word_count - 2)} and {src_word_count + 2} words. \
-This is the HIGHEST priority rule — violating word count is worse than slightly imperfect tone.
+2. **NATURAL LENGTH**: The translation should be as concise as natural spoken Hindi/Hinglish allows. Do NOT artificially pad or truncate the sentence just to match the English word count if it destroys the slang, humor, or idiom.
 3. **GREETINGS & SHORT LINES**: If the source text is a greeting (e.g., "Hi"), translate it as a literal casual greeting (e.g., "हाय", "क्या हाल"), NOT as "हाँ" or an action. Keep the exact intent.
 4. **SLANG & TONE**: The CHARACTER STYLE and DUBBING REGISTER describe the character's OVERALL personality. \
 — Match the slang level to the line: use heavy slang for aggressive/profane lines. \
@@ -96,6 +94,10 @@ This is the HIGHEST priority rule — violating word count is worse than slightl
 8. Pronouns and address forms must match the character's relationship dynamics \
 (e.g. use informal "you" forms for aggressive/casual speakers).
 9. Output MUST be in {segment.language_name} script (e.g. Devanagari for Hindi). Never output in Roman/Latin script.
+10. **IDIOMS & SLANG ADAPTATION**: DO NOT translate English slang, jokes, or idioms literally (e.g., 'Whiskey Dick'). You MUST adapt them into culturally equivalent Hindi/Bambaiya slang or vulgarity (e.g., using words like 'नुन्नू', 'केले की मूँगफली', 'सुमड़ी', 'चिकने' if it fits) that captures the exact comedic or vulgar intent.
+11. **HINGLISH USAGE**: For casual characters, frequently use English loanwords common in Hindi slang (e.g., 'सिस्टर', 'इंटरेस्ट', 'ड्रिंक', 'डेट', 'टच') instead of pure Hindi ('मैडम', 'मतलब', 'जाम').
+12. **FORMALITY PRECISION**: Distinguish carefully between 'तू' (extreme intimacy/aggression) and 'तुम' (casual/mildly disrespectful). Do not use 'तू'/'देख' if 'तुम'/'सुनो' is more appropriate for a casual but not overly abrasive interaction. Do not add honorifics like 'साब' inappropriately.
+13. **STRICT WORD COUNT ENFORCEMENT**: The translated word count MUST NOT differ by more than 1 word from the English source word count.
 
 === VIDEO PROFILE ===
 Video Type    : {video_type}

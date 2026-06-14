@@ -33,10 +33,12 @@ class EnglishToHindiTranslator(BaseTranslator):
             system_prompt = (
                 f"You are an expert Hindi dubbing translator. "
                 f"Translate the English text into Hindi that matches the exact scene tone. "
-                f"Setting: {setting_summary}. Formality: {formality_level}. Tone: {overall_tone}. "
-                f"Dynamically adjust the colloquialism, regional dialect, and slang to fit perfectly. "
-                f"Do not sanitize vulgarity if the context is aggressive. "
-                f"Strictly maintain the original length."
+                f"Setting: {setting_summary}. Formality: {formality_level}. Tone: {overall_tone}. \n\n"
+                f"Rules for translation:\n"
+                f"1. DO NOT translate English idioms/slang literally (e.g., 'Whiskey Dick'). Use context-appropriate Hindi/Bambaiya slang, Tapori language, or Hinglish (e.g., 'सुमड़ी', 'चिकने', 'नुन्नू').\n"
+                f"2. Strict Word Count Constraint: The Hindi translation word count MUST be within 1 word of the English source.\n"
+                f"3. Strict Formality Rule: If the tone is aggressive/intimate, ALWAYS use 'तू/तेरा' instead of 'तुम/आप'. NEVER add unprompted respectful honorifics like 'साब' or polite terms like 'मैडम' in street slang contexts.\n"
+                f"4. Do not sanitize vulgarity if the context is aggressive."
             )
         else:
             speech_text = segment
