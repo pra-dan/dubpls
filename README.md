@@ -224,7 +224,7 @@ python3 main.py
 
 # Only stage 1 (Separate A+V, get video+audio context) 
 # Uses Gemini for BOTH dialogue profiling and translation
-clear && python3 automate_pipeline.py --total 4 --skip-stage2 
+clear && python3 automate_pipeline.py --video-path media/trailer_hi_muted.mp4 --audio-path media/trailer_hi_extracted_dialog.wav --total 4 --skip-stage1
 
 # Uses local llama.cpp for dialogue profiling, but keeps Gemini for translation
 python3 automate_pipeline.py --total 3 --dialogue-llm local

@@ -30,36 +30,7 @@ def classify_segment_audio(audio_clip, sample_rate):
     main_label = gender_id2label[str(int(np.argmax(probs)))]
     return {"probs": prediction, "label": main_label}
 
-## Model 2
-# Emotion classification model setup
-emotion_model_name = "prithivMLmods/Speech-Emotion-Classification"
-emotion_model = Wav2Vec2ForSequenceClassification.from_pretrained(emotion_model_name)
-emotion_processor = Wav2Vec2FeatureExtractor.from_pretrained(emotion_model_name)
-emotion_id2label = {
-    "0": "Anger",
-    "1": "Calm",
-    "2": "Disgust",
-    "3": "Fear",
-    "4": "Happy",
-    "5": "Neutral",
-    "6": "Sad",
-    "7": "Surprised"
-}
 
-def classify_audio_emotion_clip(audio_clip, sample_rate):
-    inputs = emotion_processor(
-        audio_clip,
-        sampling_rate=sample_rate,
-        return_tensors="pt",
-        padding=True
-    )
-    with torch.no_grad():
-        outputs = emotion_model(**inputs)
-        logits = outputs.logits
-        probs = torch.nn.functional.softmax(logits, dim=1).squeeze().tolist()
-    prediction = {emotion_id2label[str(i)]: round(probs[i], 3) for i in range(len(probs))}
-    main_label = emotion_id2label[str(int(np.argmax(probs)))]
-    return {"probs": prediction, "label": main_label}
 
 def process_audio_with_segments(audio_path, json_path, save_to=None):
     print(f"Loading audio: {audio_path}...")
@@ -88,11 +59,7 @@ def process_audio_with_segments(audio_path, json_path, save_to=None):
             gender_entry = {'label': gender_label, 'score': gender_pred["probs"][gender_label]}
             segment["audio_gender_classification"] = gender_entry
             
-            # 2. Run Emotion Classification
-            emotion_pred = classify_audio_emotion_clip(audio_clip, sr)
-            emotion_label = emotion_pred["label"]
-            emotion_entry = {'label': emotion_label, 'score': emotion_pred["probs"][emotion_label]}
-            segment["audio_emotion_classification"] = emotion_entry
+
 
     out_path = save_to if save_to is not None else json_path
     with open(out_path, "w", encoding="utf-8") as f:

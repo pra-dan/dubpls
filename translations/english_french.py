@@ -23,7 +23,6 @@ Visual Context: {visual_context}
 
 === SPEAKER INFO ===
 Speaker Gender : {audio_speaker_gender} (Ensure correct grammatical gender for self-referential words.)
-Speaker Emotion: {audio_speaker_emotion} (Ensure the tone reflects this emotion.)
 
 Task: Translate the English text to French.
 - The translation must be colloquial and match the genre/tone described above.
@@ -92,9 +91,6 @@ class EnglishToFrenchTranslator(BaseTranslator):
         agc = segment.get("audio_gender_classification")
         speaker_gender = agc.get("label", "") if isinstance(agc, dict) else (agc if isinstance(agc, str) else "")
 
-        # --- Speaker emotion ---
-        aec = segment.get("audio_emotion_classification")
-        speaker_emotion = aec.get("label", "") if isinstance(aec, dict) else (aec if isinstance(aec, str) else "")
 
         # --- Video profile fields (from the whole-video VideoProfile) ---
         vp = segment.get("video_profile") or {}
@@ -122,7 +118,6 @@ class EnglishToFrenchTranslator(BaseTranslator):
             setting_summary=setting_summary,
             visual_context=video_context,
             audio_speaker_gender=speaker_gender,
-            audio_speaker_emotion=speaker_emotion,
         )
 
         # Build the messages, injecting all profile fields as well as context + text

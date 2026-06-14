@@ -117,7 +117,7 @@ def run_audio_classification(data: dict, audio_path: str, total: int) -> dict:
     print(f"{'='*60}")
 
     import librosa
-    from audio_classification import classify_segment_audio, classify_audio_emotion_clip
+    from audio_classification import classify_segment_audio
 
     print(f"  Loading audio: {audio_path}")
     audio, sr = librosa.load(audio_path, sr=16000)
@@ -143,15 +143,9 @@ def run_audio_classification(data: dict, audio_path: str, total: int) -> dict:
                 "score": gender_pred["probs"][gender_pred["label"]],
             }
 
-            emotion_pred = classify_audio_emotion_clip(audio_clip, sr)
-            seg["audio_emotion_classification"] = {
-                "label": emotion_pred["label"],
-                "score": emotion_pred["probs"][emotion_pred["label"]],
-            }
         except Exception as e:
             print(f"  [!] Audio classification error on segment {i}: {e}")
             seg["audio_gender_classification"] = {"label": "unknown", "score": 0.0}
-            seg["audio_emotion_classification"] = {"label": "unknown", "score": 0.0}
 
         if (i + 1) % 5 == 0 or i + 1 == total:
             print(f"  Classified {i+1}/{total} segments")
@@ -188,7 +182,7 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
     # Fields explicitly handled by Segment constructor — avoid double-passing via **kwargs
     _SEGMENT_EXPLICIT_FIELDS = {
         "text", "start", "end", "speaker", "collected_scenes_path",
-        "audio_gender_classification", "audio_emotion_classification",
+        "audio_gender_classification",
         "video_context", "video_profile", "translation",
         "character_style", "dubbing_register",
     }
@@ -217,7 +211,6 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 speaker=seg_dict.get("speaker", "unknown"),
                 collected_scenes_path=seg_dict.get("collected_scenes_path", video_path),
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
-                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
                 video_profile=profile,
                 translation=seg_dict.get("translation"),
@@ -248,7 +241,6 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 end=seg_dict.get("end", 0.0),
                 speaker=seg_dict.get("speaker", "unknown"),
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
-                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
                 video_profile=profile,
                 target_language=TARGET_LANGUAGE,
@@ -317,7 +309,7 @@ def run_translation(data: dict, total: int) -> dict:
         # Fields explicitly handled by Segment constructor
         _SEGMENT_EXPLICIT_FIELDS = {
             "text", "start", "end", "speaker", "collected_scenes_path",
-            "audio_gender_classification", "audio_emotion_classification",
+            "audio_gender_classification",
             "video_context", "video_profile", "translation",
             "character_style", "dubbing_register",
         }
@@ -331,7 +323,6 @@ def run_translation(data: dict, total: int) -> dict:
                 speaker=seg_dict.get("speaker", "unknown"),
                 collected_scenes_path=seg_dict.get("collected_scenes_path"),
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
-                audio_emotion_classification=seg_dict.get("audio_emotion_classification"),
                 video_context=seg_dict.get("video_context"),
                 video_profile=video_profile_obj,
                 character_style=seg_dict.get("character_style"),
@@ -571,6 +562,9 @@ def main():
     print(f"  Segments to process : {args.total}")
     print(f"  Skip Stage 1 (VLM)  : {args.skip_stage1}")
     print(f"  Skip Stage 2 (Trans): {args.skip_stage2}")
+    print(f"  Input JSON          : {STAGE1_JSON if args.skip_stage1 else args.json_path}")
+    print(f"  Audio File          : {args.audio_path}")
+    print(f"  Video File          : {args.video_path}")
     print()
 
     # ===================================================================

@@ -521,6 +521,7 @@ async def extract_scene_summaries_cloud(
             "  - What is happening (actions, interactions, key events)\n"
             "  - The emotional tone or tension of the scene\n"
             "  - Any narrative significance if evident from the visuals\n"
+            "  - If you recognize the movie or any famous actors/characters, explicitly state their names!\n"
             "Be factual and specific. Avoid vague openers like 'The scene shows...'. "
             "Do NOT describe the mosaic grid layout itself. "
             "Do NOT add headings or bullet points — write continuous prose."
@@ -541,6 +542,11 @@ async def extract_scene_summaries_cloud(
             print(f"[vlm_agent] Scene {scene_idx}: mosaic failed, skipping.")
             results.append({"scene_idx": scene_idx, "start": start_s, "end": end_s, "summary": ""})
             continue
+
+        import os
+        os.makedirs("media/mosaics", exist_ok=True)
+        with open(f"media/mosaics/scene_{scene_idx}.jpg", "wb") as f:
+            f.write(mosaic_bytes)
 
         try:
             # Build a prompt that includes the previous scene's context for narrative continuity
@@ -673,11 +679,7 @@ async def extract_character_style(
     elif isinstance(segment.audio_gender_classification, str):
         gender = segment.audio_gender_classification
 
-    emotion = ""
-    if isinstance(segment.audio_emotion_classification, dict):
-        emotion = segment.audio_emotion_classification.get("label", "")
-    elif isinstance(segment.audio_emotion_classification, str):
-        emotion = segment.audio_emotion_classification
+
 
     style_agent = Agent(
         "google:gemini-3.1-flash-lite",
@@ -705,7 +707,7 @@ async def extract_character_style(
         f"Maturity: {video_profile.get('maturity_rating', 'unknown')}\n"
         f"Overall Tone: {video_profile.get('tone', 'neutral')}\n\n"
         f"=== SCENE ===\n{scene_info}\n\n"
-        f"=== SPEAKER ===\nGender: {gender}, Current Emotion: {emotion}\n\n"
+        f"=== SPEAKER ===\nGender: {gender}\n\n"
         f"=== SURROUNDING TRANSCRIPT (for context) ===\n{full_transcript[:1500]}\n\n"
         f"=== DIALOGUE LINE TO ANALYZE ===\n\"{segment.text.strip()}\"\n\n"
         f"Describe this character's verbal style for a dubbing translator."
@@ -755,14 +757,14 @@ async def extract_dubbing_register(
             f"Given a video's genre/tone/maturity and a character's speaking style, "
             f"you must determine the EXACT {language_name} dialect, register, and slang level "
             f"that a dubbing translator should use.\n\n"
-            f"Your output must be a concise 2-3 sentence directive that a translator can follow. "
+            f"Your output must be a concise directive that a translator can follow. "
             f"Include:\n"
             f"1. The specific regional dialect or register (e.g. 'Mumbaiyya tapori Hindi', "
             f"'Parisian argot French', 'Mexican street Spanish')\n"
             f"2. Pronoun/address conventions (e.g. 'use तू/तेरा, never आप', 'use tú, never usted')\n"
             f"3. How to handle profanity (e.g. 'transliterate English swears directly', "
             f"'use local equivalents', 'keep it clean')\n"
-            f"4. Specific sentence patterns or endings typical of this register\n\n"
+            f"4. EXTREME CREATIVE LOCALIZATION EXAMPLES: Provide 2 examples of how to rewrite jokes, idioms, or cultural references to fit {language_name} culture perfectly instead of literally translating them (like adapting an English joke into a completely different but equivalent cultural idiom in {language_name}).\n\n"
             f"Be EXTREMELY specific to {language_name}. A translator reading your output "
             f"should know EXACTLY what dialect and style to write in.\n"
             f"Output ONLY the directive, no headings or explanations."

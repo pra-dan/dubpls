@@ -59,14 +59,6 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
     elif getattr(segment.audio_gender_classification, 'label', None):
         gender = segment.audio_gender_classification.label
 
-    # ── Speaker emotion ──────────────────────────────────────────────────────
-    emotion = ""
-    if isinstance(segment.audio_emotion_classification, dict):
-        emotion = segment.audio_emotion_classification.get('label', '')
-    elif isinstance(segment.audio_emotion_classification, str):
-        emotion = segment.audio_emotion_classification
-    elif getattr(segment.audio_emotion_classification, 'label', None):
-        emotion = segment.audio_emotion_classification.label
 
     # ── Character / dubbing style (dynamically extracted per-segment) ───────
     char_style = segment.character_style or ""
@@ -119,7 +111,6 @@ Visual Context: {video_context}
 
 === SPEAKER INFO ===
 Speaker Gender : {gender} (Ensure correct grammatical gender for self-referential words.)
-Speaker Emotion: {emotion} (Ensure the tone matches this emotion.)
 """
 
 
@@ -127,5 +118,12 @@ async def translate_segment(segment: Segment) -> str:
     """
     Helper function to run the agent on a single segment.
     """
+    # Step 1: Initial Translation
     result = await translator_agent.run(segment.text, deps=segment)
-    return result.output
+    initial_translation = result.output if isinstance(result.output, str) else str(result.output)
+    
+    # Step 2: Proofreading / Grammar Check
+    from proofreader_agent import proofread_segment
+    final_translation = await proofread_segment(segment, initial_translation)
+    
+    return final_translation

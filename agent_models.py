@@ -38,7 +38,6 @@ class Segment(BaseModel):
     
     # Allow dict or string for backwards compatibility with existing JSON
     audio_gender_classification: Optional[Union[AudioClassification, str, dict]] = None
-    audio_emotion_classification: Optional[Union[AudioClassification, str, dict]] = None
     
     video_context: Optional[str] = Field(None, description="Visual context description extracted by VLM")
     # Whole-video profile shared across all segments (populated from PipelineData.video_profile)
