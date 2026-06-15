@@ -171,6 +171,7 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
         extract_segment_context_cloud,
         extract_character_style,
         extract_dubbing_register,
+        _find_scene_for_segment,
     )
 
     segments = data.get("segments", [])
@@ -200,6 +201,8 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
         print(f"  [Stage 1b] Got {len(scene_summaries)} scene summaries")
 
         # --- 1c. Per-segment dialogue context (cloud) -------------------------
+        prev_scene_idx = None
+        prev_context = ""
         for i in range(total):
             seg_dict = segments[i]
             seg_dict["video_profile"] = data["video_profile"]
@@ -219,12 +222,21 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 **{k: v for k, v in seg_dict.items() if k not in _SEGMENT_EXPLICIT_FIELDS}
             )
 
-            try:
-                video_context = await extract_segment_context_cloud(seg, scene_summaries)
-                seg_dict["video_context"] = video_context
-            except Exception as e:
-                print(f"  [!] Context error on segment {i}: {e}")
-                seg_dict["video_context"] = ""
+            scene = _find_scene_for_segment(scene_summaries, seg.start, seg.end)
+            scene_idx = scene["scene_idx"] if scene else -1
+
+            if scene_idx == prev_scene_idx and prev_scene_idx != -1 and prev_context:
+                seg_dict["video_context"] = prev_context
+                print(f"  [Stage 1c] Seg {i}: Reusing context from scene {scene_idx}")
+            else:
+                try:
+                    video_context = await extract_segment_context_cloud(seg, scene_summaries)
+                    seg_dict["video_context"] = video_context
+                    prev_scene_idx = scene_idx
+                    prev_context = video_context
+                except Exception as e:
+                    print(f"  [!] Context error on segment {i}: {e}")
+                    seg_dict["video_context"] = ""
 
             if (i + 1) % 5 == 0 or i + 1 == total:
                 print(f"  Processed {i+1}/{total} segments (context)")

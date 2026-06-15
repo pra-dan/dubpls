@@ -3,6 +3,7 @@ import base64
 import json
 import re
 import cv2
+import numpy as np
 import requests
 from typing import List, Optional
 
@@ -416,8 +417,8 @@ def create_scene_mosaic(
     tile_height: int = 180,
 ) -> Optional[bytes]:
     """
-    Samples `grid_cols * grid_rows` equidistant frames from [start_time, end_time]
-    in the video and arranges them in a grid mosaic.
+    Samples frames from [start_time, end_time], deduplicates similar frames,
+    and arranges them in a grid mosaic.
 
     Returns the raw JPEG bytes of the mosaic, or None on failure.
     """
@@ -436,22 +437,35 @@ def create_scene_mosaic(
         cap.release()
         return None
 
+    num_candidates = n_tiles * 3
     positions = [
-        start_f + int(i * (end_f - start_f) / (n_tiles - 1))
-        for i in range(n_tiles)
-    ] if n_tiles > 1 else [start_f]
+        start_f + int(i * (end_f - start_f) / max(1, num_candidates - 1))
+        for i in range(num_candidates)
+    ]
 
     tiles = []
+    last_gray = None
+
     for pos in positions:
+        if len(tiles) >= n_tiles:
+            break
         cap.set(cv2.CAP_PROP_POS_FRAMES, pos)
         ret, frame = cap.read()
         if ret:
             tile = cv2.resize(frame, (tile_width, tile_height))
-        else:
-            tile = cv2.zeros((tile_height, tile_width, 3), dtype="uint8")
-        tiles.append(tile)
+            gray = cv2.cvtColor(tile, cv2.COLOR_BGR2GRAY)
+            if last_gray is not None:
+                diff = cv2.absdiff(gray, last_gray).mean()
+                if diff < 10.0:  # Skip similar frame
+                    continue
+            tiles.append(tile)
+            last_gray = gray
 
     cap.release()
+
+    # If we didn't find enough unique frames, pad with black tiles
+    while len(tiles) < n_tiles:
+        tiles.append(np.zeros((tile_height, tile_width, 3), dtype="uint8"))
 
     # Build grid row by row
     rows = []
