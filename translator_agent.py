@@ -29,13 +29,13 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
 
     # ── Video profile (whole-video; extracted once by VLM) ───────────────────
     vp = segment.video_profile
-    if vp is not None:
-        if hasattr(vp, "model_dump"):
-            vp_dict = vp.model_dump()
-        elif isinstance(vp, dict):
-            vp_dict = vp
-        else:
-            vp_dict = {}
+    if not vp:
+        raise ValueError("Missing video_profile metadata during translation. Cannot proceed with limited context.")
+
+    if hasattr(vp, "model_dump"):
+        vp_dict = vp.model_dump()
+    elif isinstance(vp, dict):
+        vp_dict = vp
     else:
         vp_dict = {}
 
@@ -62,7 +62,9 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
 
     # ── Character / dubbing style (dynamically extracted per-segment) ───────
     char_style = segment.character_style or ""
-    dubbing_register = segment.dubbing_register or ""
+    dubbing_register = segment.dubbing_register
+    if not dubbing_register:
+        raise ValueError("Missing dubbing_register metadata during translation. Cannot proceed with limited context.")
 
     # Count source words for the prompt
     src_word_count = len(segment.text.strip().split())

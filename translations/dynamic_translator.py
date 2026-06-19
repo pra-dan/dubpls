@@ -80,7 +80,14 @@ class LLMDynamicTranslator(BaseTranslator):
         speaker_gender = agc.get("label", "") if isinstance(agc, dict) else (agc if isinstance(agc, str) else "")
 
 
-        vp = segment.get("video_profile") or {}
+        vp = segment.get("video_profile")
+        if not vp:
+            raise ValueError("Missing video_profile metadata during translation. Cannot proceed with limited context.")
+
+        dubbing_register = segment.get("dubbing_register")
+        if not dubbing_register:
+            raise ValueError("Missing dubbing_register metadata during translation. Cannot proceed with limited context.")
+
         if hasattr(vp, "model_dump"):
             vp = vp.model_dump()
 

@@ -456,7 +456,7 @@ def create_scene_mosaic(
             gray = cv2.cvtColor(tile, cv2.COLOR_BGR2GRAY)
             if last_gray is not None:
                 diff = cv2.absdiff(gray, last_gray).mean()
-                if diff < 10.0:  # Skip similar frame
+                if diff < 30.0:  # Skip similar frame
                     continue
             tiles.append(tile)
             last_gray = gray
@@ -481,8 +481,8 @@ def create_scene_mosaic(
 async def extract_scene_summaries_cloud(
     video_path: str,
     threshold: float = 27.0,
-    grid_cols: int = 6,
-    grid_rows: int = 6,
+    grid_cols: int = 3,
+    grid_rows: int = 3,
 ) -> List[dict]:
     """
     Detects scenes using PySceneDetect, builds a mosaic for each scene,

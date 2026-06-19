@@ -22,7 +22,14 @@ class EnglishToHindiTranslator(BaseTranslator):
         # Handle case where segment might be a string (from warmup) or a dict (from pipeline)
         if isinstance(segment, dict):
             speech_text = segment.get("text", "")
-            vp = segment.get("video_profile") or {}
+            vp = segment.get("video_profile")
+            if not vp:
+                raise ValueError("Missing video_profile metadata during translation. Cannot proceed with limited context.")
+            
+            dubbing_register = segment.get("dubbing_register")
+            if not dubbing_register:
+                raise ValueError("Missing dubbing_register metadata during translation. Cannot proceed with limited context.")
+
             if hasattr(vp, "model_dump"):
                 vp = vp.model_dump()
             

@@ -93,7 +93,14 @@ class EnglishToFrenchTranslator(BaseTranslator):
 
 
         # --- Video profile fields (from the whole-video VideoProfile) ---
-        vp = segment.get("video_profile") or {}
+        vp = segment.get("video_profile")
+        if not vp:
+            raise ValueError("Missing video_profile metadata during translation. Cannot proceed with limited context.")
+
+        dubbing_register = segment.get("dubbing_register")
+        if not dubbing_register:
+            raise ValueError("Missing dubbing_register metadata during translation. Cannot proceed with limited context.")
+
         # video_profile may be a dict (from JSON) or a VideoProfile Pydantic object
         if hasattr(vp, "model_dump"):
             vp = vp.model_dump()
