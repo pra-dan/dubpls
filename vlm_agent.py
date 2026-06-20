@@ -619,27 +619,41 @@ def _find_scene_for_segment(scene_summaries: List[dict], seg_start: float, seg_e
 async def extract_segment_context_cloud(
     segment: "Segment",
     scene_summaries: List[dict],
-) -> str:
+) -> dict:
     """
     Given a segment and the pre-computed scene summaries, asks Gemini to produce
-    a 1-sentence visual context for this dialogue grounded in the parent scene.
-
-    This replaces the local `extract_visual_context()` call.
+    a 1-sentence visual context and a justification for the English dialogue
+    grounded in the parent scene and mosaic.
     """
     import dotenv
     dotenv.load_dotenv()
-    from pydantic_ai import Agent
+    from pydantic_ai import Agent, BinaryContent
 
     parent_scene = _find_scene_for_segment(scene_summaries, segment.start, segment.end)
     scene_info = parent_scene["summary"] if parent_scene and parent_scene.get("summary") else "No scene summary available."
+    scene_idx = parent_scene["scene_idx"] if parent_scene and "scene_idx" in parent_scene else -1
+
+    mosaic_bytes = None
+    if scene_idx != -1:
+        import os
+        mosaic_path = f"media/mosaics/scene_{scene_idx}.jpg"
+        if os.path.exists(mosaic_path):
+            with open(mosaic_path, "rb") as f:
+                mosaic_bytes = f.read()
+
+    from pydantic import BaseModel
+    class SegmentContextResult(BaseModel):
+        visual_context: str
+        dialogue_justification: str
 
     context_agent = Agent(
         "google:gemini-3.1-flash-lite",
-        output_type=str,
+        output_type=SegmentContextResult,
         system_prompt=(
-            "You are a dubbing context annotator. Your job is to write a single concise sentence "
-            "describing the visual context for a specific dialogue line, grounded in the scene description provided. "
-            "This context will be used to help a translator choose the most appropriate wording. "
+            "You are a dubbing context annotator. Your job is to analyze the scene description, "
+            "the provided scene mosaic image, and the English dialogue line, then output JSON with:\n"
+            "1. 'visual_context': A single concise sentence describing the specific visual context for this dialogue line.\n"
+            "2. 'dialogue_justification': A concise justification of why the speaker said this line based on the visual context and actions in the mosaic.\n"
             "Be specific about characters, mood, and setting. Do NOT just repeat the scene description."
         ),
     )
@@ -647,18 +661,29 @@ async def extract_segment_context_cloud(
     prompt = (
         f"Scene description: {scene_info}\n\n"
         f"Dialogue line: \"{segment.text.strip()}\"\n\n"
-        "In one sentence, describe the specific visual context for this dialogue line."
+        "Analyze the visual context and justify the dialogue."
     )
 
     try:
-        result = await context_agent.run(prompt)
-        context = result.data if hasattr(result, "data") else result.output
-        if not isinstance(context, str):
-            context = str(context)
-        return context.strip()
+        if mosaic_bytes:
+            result = await context_agent.run([
+                BinaryContent(data=mosaic_bytes, media_type="image/jpeg"),
+                prompt
+            ])
+        else:
+            result = await context_agent.run(prompt)
+            
+        data = result.data if hasattr(result, "data") else result.output
+        return {
+            "visual_context": data.visual_context.strip(),
+            "dialogue_justification": data.dialogue_justification.strip()
+        }
     except Exception as exc:
         print(f"[vlm_agent] extract_segment_context_cloud failed for segment [{segment.start:.1f}s]: {exc}")
-        return scene_info  # Fallback: just use the scene summary
+        return {
+            "visual_context": scene_info,
+            "dialogue_justification": "Could not extract justification."
+        }
 
 
 # ---------------------------------------------------------------------------

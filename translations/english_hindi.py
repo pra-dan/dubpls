@@ -36,11 +36,13 @@ class EnglishToHindiTranslator(BaseTranslator):
             setting_summary = vp.get("setting_summary", "Not available")
             formality_level = vp.get("formality_level", "informal")
             overall_tone = vp.get("tone", "neutral")
+            dialogue_justification = segment.get("dialogue_justification", "Not available")
             
             system_prompt = (
                 f"You are an expert Hindi dubbing translator. "
                 f"Translate the English text into Hindi that matches the exact scene tone. "
-                f"Setting: {setting_summary}. Formality: {formality_level}. Tone: {overall_tone}. \n\n"
+                f"Setting: {setting_summary}. Formality: {formality_level}. Tone: {overall_tone}. \n"
+                f"Dialogue Justification: {dialogue_justification}\n\n"
                 f"Rules for translation:\n"
                 f"1. DO NOT translate English idioms/slang literally (e.g., 'Whiskey Dick'). Use context-appropriate Hindi/Bambaiya slang, Tapori language, or Hinglish (e.g., 'सुमड़ी', 'चिकने', 'नुन्नू').\n"
                 f"2. Strict Word Count Constraint: The Hindi translation word count MUST be within 1 word of the English source.\n"

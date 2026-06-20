@@ -49,6 +49,7 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
 
     # ── Per-segment visual context ───────────────────────────────────────────
     video_context = segment.video_context or "No visual context!"
+    dialogue_justification = segment.dialogue_justification or "No dialogue justification!"
 
     # ── Speaker gender ───────────────────────────────────────────────────────
     gender = ""
@@ -110,6 +111,7 @@ Setting       : {setting_summary}
 
 === SCENE CONTEXT ===
 Visual Context: {video_context}
+Dialogue Justification: {dialogue_justification}
 
 === SPEAKER INFO ===
 Speaker Gender : {gender} (Ensure correct grammatical gender for self-referential words.)

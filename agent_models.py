@@ -40,6 +40,7 @@ class Segment(BaseModel):
     audio_gender_classification: Optional[Union[AudioClassification, str, dict]] = None
     
     video_context: Optional[str] = Field(None, description="Visual context description extracted by VLM")
+    dialogue_justification: Optional[str] = Field(None, description="VLM's justification for why the speaker said this English line, based on the mosaic")
     # Whole-video profile shared across all segments (populated from PipelineData.video_profile)
     video_profile: Optional["VideoProfile"] = Field(None, description="Global video genre/type profile from VLM")
     

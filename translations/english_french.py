@@ -20,6 +20,7 @@ Setting       : {setting_summary}
 
 === SCENE CONTEXT ===
 Visual Context: {visual_context}
+Dialogue Justification: {dialogue_justification}
 
 === SPEAKER INFO ===
 Speaker Gender : {audio_speaker_gender} (Ensure correct grammatical gender for self-referential words.)
@@ -112,8 +113,9 @@ class EnglishToFrenchTranslator(BaseTranslator):
         overall_tone     = vp.get("tone", "neutral")
         formality_level  = vp.get("formality_level", "informal")
         setting_summary  = vp.get("setting_summary") or "Not available."
-
+        
         video_context = segment.get("video_context", "No visual context!")
+        dialogue_justification = segment.get("dialogue_justification", "No dialogue justification!")
 
         common_context = COMMON_CONTEXT_TEMPLATE.format(
             video_type=video_type,
@@ -124,6 +126,7 @@ class EnglishToFrenchTranslator(BaseTranslator):
             formality_level=formality_level,
             setting_summary=setting_summary,
             visual_context=video_context,
+            dialogue_justification=dialogue_justification,
             audio_speaker_gender=speaker_gender,
         )
 

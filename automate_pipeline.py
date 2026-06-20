@@ -184,7 +184,7 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
     _SEGMENT_EXPLICIT_FIELDS = {
         "text", "start", "end", "speaker", "collected_scenes_path",
         "audio_gender_classification",
-        "video_context", "video_profile", "translation",
+        "video_context", "dialogue_justification", "video_profile", "translation",
         "character_style", "dubbing_register",
     }
 
@@ -215,6 +215,7 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
                 collected_scenes_path=seg_dict.get("collected_scenes_path", video_path),
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
                 video_context=seg_dict.get("video_context"),
+                dialogue_justification=seg_dict.get("dialogue_justification"),
                 video_profile=profile,
                 translation=seg_dict.get("translation"),
                 target_language=TARGET_LANGUAGE,
@@ -225,18 +226,14 @@ def run_vlm_context(data: dict, video_path: str, total: int, dialogue_llm: str =
             scene = _find_scene_for_segment(scene_summaries, seg.start, seg.end)
             scene_idx = scene["scene_idx"] if scene else -1
 
-            if scene_idx == prev_scene_idx and prev_scene_idx != -1 and prev_context:
-                seg_dict["video_context"] = prev_context
-                print(f"  [Stage 1c] Seg {i}: Reusing context from scene {scene_idx}")
-            else:
-                try:
-                    video_context = await extract_segment_context_cloud(seg, scene_summaries)
-                    seg_dict["video_context"] = video_context
-                    prev_scene_idx = scene_idx
-                    prev_context = video_context
-                except Exception as e:
-                    print(f"  [!] Context error on segment {i}: {e}")
-                    seg_dict["video_context"] = ""
+            try:
+                context_result = await extract_segment_context_cloud(seg, scene_summaries)
+                seg_dict["video_context"] = context_result.get("visual_context", "")
+                seg_dict["dialogue_justification"] = context_result.get("dialogue_justification", "")
+            except Exception as e:
+                print(f"  [!] Context error on segment {i}: {e}")
+                seg_dict["video_context"] = ""
+                seg_dict["dialogue_justification"] = ""
 
             if (i + 1) % 5 == 0 or i + 1 == total:
                 print(f"  Processed {i+1}/{total} segments (context)")
@@ -322,7 +319,7 @@ def run_translation(data: dict, total: int) -> dict:
         _SEGMENT_EXPLICIT_FIELDS = {
             "text", "start", "end", "speaker", "collected_scenes_path",
             "audio_gender_classification",
-            "video_context", "video_profile", "translation",
+            "video_context", "dialogue_justification", "video_profile", "translation",
             "character_style", "dubbing_register",
         }
 
@@ -336,6 +333,7 @@ def run_translation(data: dict, total: int) -> dict:
                 collected_scenes_path=seg_dict.get("collected_scenes_path"),
                 audio_gender_classification=seg_dict.get("audio_gender_classification"),
                 video_context=seg_dict.get("video_context"),
+                dialogue_justification=seg_dict.get("dialogue_justification"),
                 video_profile=video_profile_obj,
                 character_style=seg_dict.get("character_style"),
                 dubbing_register=seg_dict.get("dubbing_register"),
