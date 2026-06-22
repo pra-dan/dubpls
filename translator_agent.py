@@ -61,25 +61,45 @@ def inject_segment_context(ctx: RunContext[Segment]) -> str:
         gender = segment.audio_gender_classification.label
 
 
-    # ── Character / dubbing style (dynamically extracted per-segment) ───────
-    char_style = segment.character_style or ""
-    dubbing_register = segment.dubbing_register
-    if not dubbing_register:
-        raise ValueError("Missing dubbing_register metadata during translation. Cannot proceed with limited context.")
-
     # Count source words for the prompt
     src_word_count = len(segment.text.strip().split())
+
+    # ── Idiom decoder section (injected only when flags are present) ─────────
+    idiom_decoder_section = ""
+    flags = segment.idiom_flags or []
+    if flags:
+        lines = [
+            "\n=== IDIOM DECODER ===",
+            "The following phrases in this line are idiomatic/slang and MUST NOT be transliterated.",
+            "Use the decoded meanings below to drive your cultural adaptation:\n",
+        ]
+        for flag in flags:
+            # Support both IdiomFlag objects and raw dicts (from JSON deserialization)
+            if hasattr(flag, "phrase"):
+                phrase = flag.phrase
+                meaning = flag.meaning
+                sub = flag.should_substitute
+            else:
+                phrase = flag.get("phrase", "")
+                meaning = flag.get("meaning", "")
+                sub = flag.get("should_substitute", True)
+
+            action = "CULTURALLY SUBSTITUTE — do NOT transliterate" if sub else "can transliterate if natural"
+            lines.append(f'  • "{phrase}" → {meaning}')
+            lines.append(f'    Action: {action}')
+        idiom_decoder_section = "\n".join(lines)
 
     return f"""\
 You are an expert {segment.language_name} dubbing translator.
 Your task is to translate English dialogue into {segment.language_name} that perfectly matches \
-the character's speaking style and the dubbing register described below.
+the character's speaking style and the dubbing register described below. The intent of the dialogue is of utmost importance - use the "Dialogue Justification" \
+info to understand the true intent. The output may not be the literal translation but should convey the same meaning and intent.
 
 CRITICAL RULES:
 1. Output ONLY the translated line. No notes, quotes, explanations, no Devanagari transliteration.
-2. **NATURAL LENGTH**: The translation should be as concise as natural spoken Hindi/Hinglish allows. Do NOT artificially pad or truncate the sentence just to match the English word count if it destroys the slang, humor, or idiom.
+2. **NATURAL LENGTH**: The translation should be as concise as natural spoken {segment.language_name} allows. Do NOT artificially pad or truncate the sentence just to match the English word count if it destroys the slang, humor, or idiom.
 3. **GREETINGS & SHORT LINES**: If the source text is a greeting (e.g., "Hi"), translate it as a literal casual greeting (e.g., "हाय", "क्या हाल"), NOT as "हाँ" or an action. Keep the exact intent.
-4. **SLANG & TONE**: The CHARACTER STYLE and DUBBING REGISTER describe the character's OVERALL personality. \
+4. **SLANG & TONE**: The VIDEO PROFILE describes the overall tone and formality level of the video. \
 — Match the slang level to the line: use heavy slang for aggressive/profane lines. \
 — NEVER use formal or bookish vocabulary (like 'स्वागत योग्य' or 'स्वागत') for a street/casual character. \
 — For street/casual characters, heavily prefer idioms and regional slang (e.g., Bambaiya Hindi) over literal standard translations, but keep the core meaning intact.
@@ -92,7 +112,7 @@ CRITICAL RULES:
 10. **IDIOMS & SLANG ADAPTATION**: DO NOT translate English slang, jokes, or idioms literally (e.g., 'Whiskey Dick'). You MUST adapt them into culturally equivalent Hindi/Bambaiya slang or vulgarity (e.g., using words like 'नुन्नू', 'केले की मूँगफली', 'सुमड़ी', 'चिकने' if it fits) that captures the exact comedic or vulgar intent.
 11. **HINGLISH USAGE**: For casual characters, frequently use English loanwords common in Hindi slang (e.g., 'सिस्टर', 'इंटरेस्ट', 'ड्रिंक', 'डेट', 'टच') instead of pure Hindi ('मैडम', 'मतलब', 'जाम').
 12. **FORMALITY PRECISION**: Distinguish carefully between 'तू' (extreme intimacy/aggression) and 'तुम' (casual/mildly disrespectful). Do not use 'तू'/'देख' if 'तुम'/'सुनो' is more appropriate for a casual but not overly abrasive interaction. Do not add honorifics like 'साब' inappropriately.
-13. **STRICT WORD COUNT ENFORCEMENT**: The translated word count MUST NOT differ by more than 1 word from the English source word count.
+13. **STRICT WORD COUNT ENFORCEMENT**: The translated word count MUST NOT differ by more than 1 word from the English source word count, UNLESS the line contains idioms that require cultural substitution (see IDIOM DECODER section below), in which case a ±3 word variance is permitted to allow for natural transcreation.
 
 === VIDEO PROFILE ===
 Video Type    : {video_type}
@@ -103,18 +123,14 @@ Overall Tone  : {overall_tone}
 Formality     : {formality_level}
 Setting       : {setting_summary}
 
-=== CHARACTER STYLE ===
-{char_style if char_style else "No character style info available — use the video profile tone/formality as guidance."}
-
-=== DUBBING REGISTER ===
-{dubbing_register if dubbing_register else "No dubbing register info available — match the video profile formality level."}
 
 === SCENE CONTEXT ===
 Visual Context: {video_context}
-Dialogue Justification: {dialogue_justification}
+Dialogue Justification: {dialogue_justification} (English dialogue -> intent -> translation)
 
 === SPEAKER INFO ===
 Speaker Gender : {gender} (Ensure correct grammatical gender for self-referential words.)
+{idiom_decoder_section}
 """
 
 

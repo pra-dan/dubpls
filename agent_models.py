@@ -3,6 +3,23 @@ from typing import Optional, List, Dict, Any, Union, Literal
 from pydantic import ConfigDict
 
 
+class IdiomFlag(BaseModel):
+    """
+    Represents a single idiom, slang phrase, or culturally-specific expression
+    detected in a dialogue line. Produced by the VLM context agent and consumed
+    by the translation agent.
+    """
+    phrase: str = Field(
+        description="The exact English phrase that is idiomatic/slang (e.g. 'opsy-daisy', 'tick-tick', 'Whiskey Dick')"
+    )
+    meaning: str = Field(
+        description="Plain-English literal meaning of the phrase (e.g. 'here we go / I am about to grab you now')"
+    )
+    should_substitute: bool = Field(
+        description="True if the phrase MUST be culturally substituted (never transliterated). False if transliteration is acceptable."
+    )
+
+
 class VideoProfile(BaseModel):
     """Whole-video metadata extracted by the VLM once, reused per segment."""
     genre: str = Field(
@@ -44,9 +61,8 @@ class Segment(BaseModel):
     # Whole-video profile shared across all segments (populated from PipelineData.video_profile)
     video_profile: Optional["VideoProfile"] = Field(None, description="Global video genre/type profile from VLM")
     
-    # Per-segment character & dubbing style (dynamically extracted by VLM context pipeline)
-    character_style: Optional[str] = Field(None, description="Description of the speaking character's tone, personality, and verbal mannerisms")
-    dubbing_register: Optional[str] = Field(None, description="Target-language register/dialect guidance for this segment (e.g. 'Mumbaiyya tapori Hindi' or 'formal Parisian French')")
+    # Per-segment character & dubbing style are removed to prevent overriding video profile.
+    idiom_flags: Optional[List[IdiomFlag]] = Field(None, description="Idiom/slang phrases detected in the English line, with plain-English meanings and substitution guidance")
     
     translation: Optional[str] = Field(None, description="The translated text")
     
